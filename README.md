@@ -10,8 +10,25 @@ syslog (UDP/TCP) → envelope parse → route by source host → LogType parser 
 ```
 
 Each log type is a pluggable `LogType` implementation that owns its parser,
-DuckDB schema, and (later) dashboard. Sources are mapped to a log type by their
-IP/hostname in the config's `[hosts]` table.
+DuckDB schema, and dashboard. Sources (which sending IP maps to which log type)
+are managed in the database via the web UI at `/sources`.
+
+## Install
+
+Download the `.deb` or `.rpm` for your architecture (x86_64 / arm64) from the
+[latest release](https://github.com/yarivha/EasyLog/releases), then:
+
+```sh
+sudo dpkg -i easylog_*_amd64.deb       # Debian/Ubuntu
+sudo rpm -i  easylog-*.x86_64.rpm      # Fedora/RHEL
+
+sudo systemctl enable --now easylog    # start on boot
+```
+
+The package installs the binary to `/usr/bin/easylog`, web assets to
+`/usr/share/easylog`, a default config to `/etc/easylog/easylog.toml`, and a
+systemd unit. The database lives in `/var/lib/easylog`. Then open
+`http://<host>:3000/`.
 
 ## Configure
 

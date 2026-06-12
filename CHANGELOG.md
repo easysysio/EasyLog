@@ -5,9 +5,11 @@ All notable changes to EasyLog are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0] — 2026-06-12
 
 ### Added
+- Axum web service with tracing/logging (`tracing` + `tracing-subscriber`,
+  `RUST_LOG`-controlled); `GET /` landing page and `GET /health` liveness probe.
 - **Syslog ingestion:** UDP + TCP listeners (RFC3164/RFC5424 via `syslog_loose`)
   on a configurable port (default 514).
 - **Pluggable log types:** `LogType` trait + `Registry`; each type owns its
@@ -30,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Temporary `GET /apache/recent` JSON endpoint for verifying ingestion.
 - `config/easylog.toml` (syslog/web ports, db path); overridable via
   `EASYLOG_CONFIG`.
+- **Packaging:** `.deb` and `.rpm` for x86_64 and arm64, with a systemd unit and
+  a default config, built and published on tag via GitHub Actions.
 
 ### Changed
 - **Professional Bootstrap 5.3 UI** (dark theme): rebuilt all pages on Bootstrap
@@ -59,11 +63,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the socket fast: a 500-packet no-delay burst lands all 500. Bursts large
   enough to overflow the kernel UDP socket buffer are still subject to
   kernel-level drops (inherent to UDP), but no longer to writer back-pressure.
-
-## [0.1.0] — 2026-06-12
-
-### Added
-- Initial Axum web service scaffold (`src/main.rs`).
-- `GET /` landing route returning a service banner.
-- `GET /health` liveness probe returning `ok`.
-- Tracing/logging via `tracing` + `tracing-subscriber` (`RUST_LOG`-controlled).

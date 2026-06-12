@@ -26,3 +26,48 @@ tera = "1"
 # UDP receive buffer (see src/syslog/mod.rs). Not needed on other platforms.
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"
+
+# ─── Packaging ───────────────────────────────────────────────────────────────
+# .deb via `cargo deb` (cargo-deb). Installs the binary, web assets, default
+# config, and the systemd unit. Built natively per-arch in CI (amd64/arm64).
+[package.metadata.deb]
+maintainer = "yarivha <yariv.hakim@gmail.com>"
+copyright = "2026, yarivha <yariv.hakim@gmail.com>"
+extended-description = "EasyLog is a multi-log analyzer: it ingests logs over syslog (UDP + TCP), parses each by type, stores them in DuckDB, and serves a dashboard per log type."
+section = "utils"
+priority = "optional"
+depends = "$auto"
+conf-files = ["/etc/easylog/easylog.toml"]
+assets = [
+    ["target/release/easylog", "usr/bin/", "755"],
+    ["templates/base.html", "usr/share/easylog/templates/", "644"],
+    ["templates/index.html", "usr/share/easylog/templates/", "644"],
+    ["templates/sources.html", "usr/share/easylog/templates/", "644"],
+    ["templates/apache.html", "usr/share/easylog/templates/", "644"],
+    ["static/bootstrap.min.css", "usr/share/easylog/static/", "644"],
+    ["static/bootstrap.bundle.min.js", "usr/share/easylog/static/", "644"],
+    ["static/bootstrap-icons.css", "usr/share/easylog/static/", "644"],
+    ["static/fonts/bootstrap-icons.woff2", "usr/share/easylog/static/fonts/", "644"],
+    ["packaging/easylog.toml", "etc/easylog/easylog.toml", "644"],
+    ["packaging/easylog.service", "usr/lib/systemd/system/easylog.service", "644"],
+    ["README.md", "usr/share/doc/easylog/README.md", "644"],
+]
+
+# .rpm via `cargo generate-rpm` (cargo-generate-rpm). Same payload as the .deb.
+[package.metadata.generate-rpm]
+summary = "EasyLog — a multi-log analyzer (syslog ingest, dashboard per log type)"
+auto-req = "no"
+assets = [
+    { source = "target/release/easylog", dest = "/usr/bin/easylog", mode = "755" },
+    { source = "templates/base.html", dest = "/usr/share/easylog/templates/base.html", mode = "644" },
+    { source = "templates/index.html", dest = "/usr/share/easylog/templates/index.html", mode = "644" },
+    { source = "templates/sources.html", dest = "/usr/share/easylog/templates/sources.html", mode = "644" },
+    { source = "templates/apache.html", dest = "/usr/share/easylog/templates/apache.html", mode = "644" },
+    { source = "static/bootstrap.min.css", dest = "/usr/share/easylog/static/bootstrap.min.css", mode = "644" },
+    { source = "static/bootstrap.bundle.min.js", dest = "/usr/share/easylog/static/bootstrap.bundle.min.js", mode = "644" },
+    { source = "static/bootstrap-icons.css", dest = "/usr/share/easylog/static/bootstrap-icons.css", mode = "644" },
+    { source = "static/fonts/bootstrap-icons.woff2", dest = "/usr/share/easylog/static/fonts/bootstrap-icons.woff2", mode = "644" },
+    { source = "packaging/easylog.toml", dest = "/etc/easylog/easylog.toml", mode = "644", config = true },
+    { source = "packaging/easylog.service", dest = "/usr/lib/systemd/system/easylog.service", mode = "644" },
+    { source = "README.md", dest = "/usr/share/doc/easylog/README.md", mode = "644", doc = true },
+]

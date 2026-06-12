@@ -1,0 +1,32 @@
+# systemd service unit for EasyLog (installed by the deb/rpm packages).
+# Enable + start with:  sudo systemctl enable --now easylog
+[Unit]
+Description=EasyLog multi-log analyzer
+Documentation=https://github.com/yarivha/EasyLog
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Templates and static assets are loaded relative to this directory.
+WorkingDirectory=/usr/share/easylog
+Environment=EASYLOG_CONFIG=/etc/easylog/easylog.toml
+ExecStart=/usr/bin/easylog
+Restart=on-failure
+RestartSec=2
+
+# Run as a transient unprivileged user; /var/lib/easylog is created and owned
+# by it for the DuckDB database. CAP_NET_BIND_SERVICE allows binding port 514.
+DynamicUser=yes
+StateDirectory=easylog
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Hardening.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
