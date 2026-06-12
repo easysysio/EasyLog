@@ -1,0 +1,12 @@
+[package]
+name = "easylog"
+version = "0.1.0"
+edition = "2024"
+description = "EasyLog — a log analyzer web service"
+license = "MIT"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
