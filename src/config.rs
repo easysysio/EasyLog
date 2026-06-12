@@ -1,14 +1,14 @@
 // =============================================================================
 // config.rs — EasyLog runtime configuration
 //
-// Loads settings from a TOML file (default: config/easylog.toml). Holds the
-// syslog listener bind address/port, the web server port, the DuckDB path, and
-// the source-host → log-type routing map used to dispatch incoming messages.
+// Loads server settings from a TOML file (default: config/easylog.toml): the
+// syslog listener bind address/port, the web server port, and the DuckDB path.
+// Source-host → log-type routing is NOT here — sources are managed in the
+// database via the web UI (see src/sources.rs).
 // =============================================================================
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::path::Path;
 
 // Top-level configuration loaded from TOML. Fields default (see `default_*`)
@@ -27,9 +27,6 @@ pub struct Config {
     /// Path to the DuckDB database file.
     #[serde(default = "default_db_path")]
     pub db_path: String,
-    /// Map of source host/IP → log-type name (e.g. "192.168.1.10" = "apache").
-    #[serde(default)]
-    pub hosts: HashMap<String, String>,
 }
 
 fn default_bind() -> String {
@@ -52,7 +49,6 @@ impl Default for Config {
             syslog_port: default_syslog_port(),
             web_port: default_web_port(),
             db_path: default_db_path(),
-            hosts: HashMap::new(),
         }
     }
 }
@@ -74,22 +70,5 @@ impl Config {
         let cfg: Config =
             toml::from_str(&text).with_context(|| format!("parsing config {}", path.display()))?;
         Ok(cfg)
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Config::log_type_for(ip, hostname)
-    // Resolves a log-type name for an incoming message by matching the network
-    // peer IP first, then the syslog-reported hostname, against the host map.
-    // ─────────────────────────────────────────────────────────────────────────
-    pub fn log_type_for(&self, ip: &str, hostname: Option<&str>) -> Option<&str> {
-        if let Some(t) = self.hosts.get(ip) {
-            return Some(t.as_str());
-        }
-        if let Some(h) = hostname {
-            if let Some(t) = self.hosts.get(h) {
-                return Some(t.as_str());
-            }
-        }
-        None
     }
 }

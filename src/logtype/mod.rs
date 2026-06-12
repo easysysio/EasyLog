@@ -68,6 +68,16 @@ impl Registry {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Registry::names()
+    // Returns the names of all registered log types (for UI dropdowns, etc.).
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn names(&self) -> Vec<&'static str> {
+        let mut names: Vec<&'static str> = self.types.keys().copied().collect();
+        names.sort_unstable();
+        names
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Registry::init_all(conn)
     // Initializes the storage schema for every registered log type at startup.
     // ─────────────────────────────────────────────────────────────────────────

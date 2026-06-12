@@ -2,21 +2,24 @@
 // main.rs — EasyLog entry point
 //
 // Boots the EasyLog multi-log analyzer: loads config, opens DuckDB, initializes
-// every log type's schema, then runs the syslog listeners (UDP + TCP) and the
-// Axum web server concurrently over shared state. Stage 1 supports the Apache
-// log type end-to-end (ingest → store); dashboards arrive in Stage 2.
+// each log type's schema and the source registry, loads sources into memory,
+// builds the Tera template engine, then runs the syslog listeners (UDP + TCP)
+// and the Axum web server concurrently over shared state.
 // =============================================================================
 
 mod config;
 mod logtype;
+mod sources;
 mod state;
 mod storage;
 mod syslog;
 mod web;
 
-use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, RwLock};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use tera::Tera;
 
 use crate::config::Config;
 use crate::logtype::Registry;
@@ -40,33 +43,37 @@ async fn main() -> Result<()> {
 
     let config_path = std::env::var("EASYLOG_CONFIG").unwrap_or_else(|_| DEFAULT_CONFIG.to_string());
     let config = Config::load(&config_path)?;
+
+    // Open storage and initialize schemas: one table per log type, plus sources.
+    let registry = Registry::with_defaults();
+    let conn = storage::open(&config.db_path)?;
+    registry.init_all(&conn)?;
+    sources::init_schema(&conn)?;
+    let source_map: HashMap<String, sources::Source> = sources::load_map(&conn)?;
+
+    // Load the web templates.
+    let tera = Tera::new("templates/**/*.html").context("loading templates")?;
+
     tracing::info!(
-        "config: syslog {}:{} (udp+tcp), web :{}, db {}, {} host route(s)",
+        "config: syslog {}:{} (udp+tcp), web :{}, db {}, {} source(s)",
         config.syslog_bind,
         config.syslog_port,
         config.web_port,
         config.db_path,
-        config.hosts.len(),
+        source_map.len(),
     );
-
-    let registry = Registry::with_defaults();
-    let conn = storage::open(&config.db_path)?;
-    registry.init_all(&conn)?;
 
     let state = Arc::new(AppState {
         config,
         registry,
         db: Mutex::new(conn),
+        sources: RwLock::new(source_map),
+        tera,
     });
 
     // Run syslog ingestion and the web server concurrently; if either fails,
     // propagate the error and shut down.
-    let syslog_state = state.clone();
-    let web_state = state.clone();
-    tokio::try_join!(
-        syslog::serve(syslog_state),
-        web::serve(web_state),
-    )?;
+    tokio::try_join!(syslog::serve(state.clone()), web::serve(state.clone()))?;
 
     Ok(())
 }

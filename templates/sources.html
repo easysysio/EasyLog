@@ -1,0 +1,48 @@
+{# sources.html — manage log sources (name, IP, log type). #}
+{% extends "base.html" %}
+{% block title %}Sources — EasyLog{% endblock %}
+{% block content %}
+<h1>Log Sources</h1>
+
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<div class="panel">
+  <form class="row" method="post" action="/sources">
+    <input name="name" placeholder="Name (e.g. web-01)" required>
+    <input name="ip" placeholder="IP address (e.g. 203.0.113.7)" required>
+    <select name="log_type">
+      {% for t in log_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+    </select>
+    <button class="primary" type="submit">Add source</button>
+  </form>
+</div>
+
+<div class="panel">
+  {% if sources | length == 0 %}
+    <div class="empty">No sources configured yet. Add one above to start routing
+      incoming syslog by source IP.</div>
+  {% else %}
+  <table>
+    <thead>
+      <tr><th>Name</th><th>IP address</th><th>Log type</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for s in sources %}
+      <tr>
+        <td>{{ s.name }}</td>
+        <td class="muted">{{ s.ip }}</td>
+        <td><span class="tag">{{ s.log_type }}</span></td>
+        <td style="text-align:right">
+          <form class="inline" method="post" action="/sources/delete"
+                onsubmit="return confirm('Remove source {{ s.name }} ({{ s.ip }})?');">
+            <input type="hidden" name="ip" value="{{ s.ip }}">
+            <button class="danger" type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

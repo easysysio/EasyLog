@@ -82,20 +82,21 @@ async fn serve_tcp(state: Arc<AppState>, addr: (String, u16)) -> Result<()> {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // dispatch(state, ip, line)
-// Parses the syslog envelope, resolves the log type by source IP/hostname, and
-// ingests the MSG body. Locks the DB only for the synchronous insert.
+// Parses the syslog envelope, resolves the log type by source IP (via the
+// in-memory source map), and ingests the MSG body. Locks the DB only for the
+// synchronous insert; the source map is read under a short-lived read lock.
 // ─────────────────────────────────────────────────────────────────────────────
 fn dispatch(state: &Arc<AppState>, ip: IpAddr, line: &str) {
     let msg = parse_message(line, Variant::Either);
     let ip_str = ip.to_string();
     let hostname = msg.hostname.map(|h| h.to_string());
 
-    let Some(type_name) = state
-        .config
-        .log_type_for(&ip_str, hostname.as_deref())
-        .map(|s| s.to_string())
-    else {
-        tracing::debug!("no log type mapped for source {ip_str}; dropping");
+    let type_name = {
+        let map = state.sources.read().expect("sources lock poisoned");
+        map.get(&ip_str).map(|s| s.log_type.clone())
+    };
+    let Some(type_name) = type_name else {
+        tracing::debug!("no source configured for {ip_str}; dropping");
         return;
     };
 

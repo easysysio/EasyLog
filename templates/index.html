@@ -1,0 +1,13 @@
+{# index.html — EasyLog home page. Brief intro + links into the app. #}
+{% extends "base.html" %}
+{% block title %}EasyLog{% endblock %}
+{% block content %}
+<h1>EasyLog</h1>
+<div class="panel">
+  <p>A multi-log analyzer. EasyLog ingests logs over syslog (UDP + TCP), parses
+     each by type, and stores them in DuckDB.</p>
+  <p class="muted">Configured sources: <strong>{{ source_count }}</strong> ·
+     Log types: {% for t in log_types %}<span class="tag">{{ t }}</span> {% endfor %}</p>
+  <p><a href="/sources">Manage log sources →</a></p>
+</div>
+{% endblock %}

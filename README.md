@@ -21,10 +21,11 @@ EasyLog loads `config/easylog.toml` (override with `EASYLOG_CONFIG`):
 syslog_port = 514          # standard syslog; use 5514 to run without root
 web_port    = 3000
 db_path     = "easylog.duckdb"
-
-[hosts]
-"127.0.0.1" = "apache"     # map a sending host/IP to a log type
 ```
+
+**Log sources** (which sending IP maps to which log type) are managed in the
+database via the web UI at `/sources` — add a source with a name, IP address,
+and log type, and EasyLog routes matching syslog traffic to that type's parser.
 
 ## Run
 
@@ -35,6 +36,8 @@ cargo run
 Binding port 514 needs privileges; for local testing set `syslog_port = 5514`.
 The web server listens on `http://0.0.0.0:<web_port>`:
 
+Then open `http://localhost:3000/sources` to add a log source, or check:
+
 ```sh
 curl localhost:3000/health          # -> ok
 curl localhost:3000/apache/recent   # -> recent parsed Apache rows (JSON)
@@ -44,5 +47,5 @@ Set `RUST_LOG=debug` for verbose logging.
 
 ## Status
 
-Stage 1 (syslog ingestion → Apache parser → DuckDB) is complete. Stage 2 adds the
-Tera-based per-type dashboards. See [CHANGELOG.md](CHANGELOG.md).
+Syslog ingestion (Apache → DuckDB) and the source-management UI are complete.
+Next up: Tera-based per-type dashboards. See [CHANGELOG.md](CHANGELOG.md).
