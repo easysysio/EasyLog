@@ -1,14 +1,36 @@
-{# index.html — EasyLog home page. Brief intro + links into the app. #}
+{# index.html — EasyLog home page (Bootstrap). #}
 {% extends "base.html" %}
 {% block title %}EasyLog{% endblock %}
 {% block content %}
-<h1>EasyLog</h1>
-<div class="panel">
-  <p>A multi-log analyzer. EasyLog ingests logs over syslog (UDP + TCP), parses
-     each by type, and stores them in DuckDB.</p>
-  <p class="muted">Configured sources: <strong>{{ source_count }}</strong> ·
-     Log types: {% for t in log_types %}<span class="tag">{{ t }}</span> {% endfor %}</p>
-  <p><a href="/apache">Apache dashboard →</a> &nbsp;·&nbsp;
-     <a href="/sources">Manage log sources →</a></p>
+<div class="p-4 p-md-5 mb-4 rounded-3 border bg-body-tertiary">
+  <h1 class="display-6 fw-bold">Easy<span class="brand-mark">Log</span></h1>
+  <p class="col-md-9 fs-5 text-secondary mb-0">
+    A multi-log analyzer. EasyLog ingests logs over syslog (UDP&nbsp;+&nbsp;TCP),
+    parses each by type, and stores them in DuckDB — with a dedicated dashboard
+    per log type.
+  </p>
+</div>
+
+<div class="row g-3">
+  <div class="col-sm-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-2"><i class="bi bi-hdd-network me-1"></i>Configured sources</h6>
+        <div class="stat-value">{{ source_count }}</div>
+        <a href="/sources" class="stretched-link small text-decoration-none">Manage sources →</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-2"><i class="bi bi-bar-chart me-1"></i>Log types</h6>
+        <div class="mb-2">
+          {% for t in log_types %}<span class="badge text-bg-primary me-1">{{ t }}</span>{% endfor %}
+        </div>
+        <a href="/apache" class="stretched-link small text-decoration-none">Open Apache dashboard →</a>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

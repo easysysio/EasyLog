@@ -122,6 +122,7 @@ pub async fn dashboard(State(state): State<Arc<AppState>>) -> Result<Html<String
     };
 
     let mut ctx = tera::Context::new();
+    ctx.insert("active", "apache");
     ctx.insert("kpis", &kpis);
     ctx.insert("timeline", &timeline);
     ctx.insert("statuses", &statuses);
@@ -160,13 +161,13 @@ fn pct(count: i64, max: i64) -> i64 {
     }
 }
 
-// Maps an HTTP status class (2,3,4,5) to a CSS colour class.
+// Maps an HTTP status class (2,3,4,5) to a Bootstrap background-colour class.
 fn status_class(klass: i32) -> String {
     match klass {
-        2 => "ok",
-        3 => "redir",
-        4 => "warn",
-        _ => "err",
+        2 => "bg-success",
+        3 => "bg-info",
+        4 => "bg-warning",
+        _ => "bg-danger",
     }
     .to_string()
 }

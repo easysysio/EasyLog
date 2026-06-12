@@ -1,48 +1,75 @@
-{# sources.html — manage log sources (name, IP, log type). #}
+{# sources.html — manage log sources (Bootstrap). #}
 {% extends "base.html" %}
 {% block title %}Sources — EasyLog{% endblock %}
 {% block content %}
-<h1>Log Sources</h1>
-
-{% if error %}<div class="error">{{ error }}</div>{% endif %}
-
-<div class="panel">
-  <form class="row" method="post" action="/sources">
-    <input name="name" placeholder="Name (e.g. web-01)" required>
-    <input name="ip" placeholder="IP address (e.g. 203.0.113.7)" required>
-    <select name="log_type">
-      {% for t in log_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
-    </select>
-    <button class="primary" type="submit">Add source</button>
-  </form>
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0"><i class="bi bi-hdd-network me-2"></i>Log Sources</h1>
 </div>
 
-<div class="panel">
-  {% if sources | length == 0 %}
-    <div class="empty">No sources configured yet. Add one above to start routing
-      incoming syslog by source IP.</div>
-  {% else %}
-  <table>
-    <thead>
-      <tr><th>Name</th><th>IP address</th><th>Log type</th><th></th></tr>
-    </thead>
-    <tbody>
-      {% for s in sources %}
-      <tr>
-        <td>{{ s.name }}</td>
-        <td class="muted">{{ s.ip }}</td>
-        <td><span class="tag">{{ s.log_type }}</span></td>
-        <td style="text-align:right">
-          <form class="inline" method="post" action="/sources/delete"
-                onsubmit="return confirm('Remove source {{ s.name }} ({{ s.ip }})?');">
-            <input type="hidden" name="ip" value="{{ s.ip }}">
-            <button class="danger" type="submit">Remove</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
+{% if error %}
+<div class="alert alert-danger d-flex align-items-center" role="alert">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+</div>
+{% endif %}
+
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="post" action="/sources" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small text-secondary">Name</label>
+        <input name="name" class="form-control" placeholder="e.g. web-01" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-secondary">IP address</label>
+        <input name="ip" class="form-control" placeholder="e.g. 203.0.113.7" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-secondary">Log type</label>
+        <select name="log_type" class="form-select">
+          {% for t in log_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 d-grid">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg me-1"></i>Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if sources | length == 0 %}
+      <div class="text-secondary text-center py-5">
+        <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+        No sources configured yet. Add one above to start routing incoming
+        syslog by source IP.
+      </div>
+    {% else %}
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr class="text-secondary small text-uppercase">
+          <th class="ps-3">Name</th><th>IP address</th><th>Log type</th><th class="text-end pe-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sources %}
+        <tr>
+          <td class="ps-3 fw-semibold">{{ s.name }}</td>
+          <td class="font-monospace text-secondary">{{ s.ip }}</td>
+          <td><span class="badge text-bg-primary">{{ s.log_type }}</span></td>
+          <td class="text-end pe-3">
+            <form method="post" action="/sources/delete" class="d-inline"
+                  onsubmit="return confirm('Remove source {{ s.name }} ({{ s.ip }})?');">
+              <input type="hidden" name="ip" value="{{ s.ip }}">
+              <button class="btn btn-sm btn-outline-danger" type="submit">
+                <i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

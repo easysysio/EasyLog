@@ -1,61 +1,66 @@
 <!DOCTYPE html>
-{# base.html — shared layout for the EasyLog web UI: header/nav + content block. #}
-<html lang="en">
+{# base.html — shared Bootstrap layout: navbar + content block. Dark theme. #}
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}EasyLog{% endblock %}</title>
+  <link rel="stylesheet" href="/static/bootstrap.min.css">
+  <link rel="stylesheet" href="/static/bootstrap-icons.css">
   <style>
-    :root { --bg:#0f1419; --panel:#1a2029; --line:#2a323d; --fg:#e6e9ee;
-            --muted:#8a94a3; --accent:#4f9cf9; --danger:#e2555a; }
-    * { box-sizing: border-box; }
-    body { margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-           background:var(--bg); color:var(--fg); }
-    header { display:flex; align-items:center; gap:24px; padding:14px 28px;
-             background:var(--panel); border-bottom:1px solid var(--line); }
-    header .brand { font-weight:700; font-size:18px; }
-    header nav a { color:var(--muted); text-decoration:none; margin-right:18px; }
-    header nav a:hover, header nav a.active { color:var(--fg); }
-    main { max-width:900px; margin:0 auto; padding:28px; }
-    h1 { font-size:22px; margin:0 0 18px; }
-    .panel { background:var(--panel); border:1px solid var(--line);
-             border-radius:10px; padding:20px; margin-bottom:22px; }
-    table { width:100%; border-collapse:collapse; }
-    th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); }
-    th { color:var(--muted); font-weight:600; font-size:13px; text-transform:uppercase;
-         letter-spacing:.04em; }
-    tr:last-child td { border-bottom:none; }
-    .muted { color:var(--muted); }
-    .tag { display:inline-block; padding:2px 9px; border-radius:999px;
-           background:#21303f; color:var(--accent); font-size:13px; }
-    form.inline { display:inline; }
-    input, select { background:var(--bg); color:var(--fg); border:1px solid var(--line);
-                    border-radius:7px; padding:9px 11px; font-size:14px; }
-    input:focus, select:focus { outline:none; border-color:var(--accent); }
-    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    button { cursor:pointer; border:none; border-radius:7px; padding:9px 16px;
-             font-size:14px; font-weight:600; }
-    button.primary { background:var(--accent); color:#06101d; }
-    button.danger { background:transparent; color:var(--danger);
-                    border:1px solid var(--danger); padding:6px 12px; }
-    button:hover { filter:brightness(1.08); }
-    .error { background:#3a1d1f; border:1px solid var(--danger); color:#ffd9da;
-             padding:10px 14px; border-radius:8px; margin-bottom:18px; }
-    .empty { color:var(--muted); padding:18px 0; }
+    body { min-height:100vh; }
+    .navbar-brand { font-weight:700; letter-spacing:.2px; }
+    .brand-mark { color:var(--bs-primary); }
+    main { max-width:1040px; }
+    .stat-value { font-size:1.9rem; font-weight:700; line-height:1.1; }
+    .stat-label { color:var(--bs-secondary-color); font-size:.78rem;
+                  text-transform:uppercase; letter-spacing:.05em; }
+    .section-title { font-size:.8rem; text-transform:uppercase; letter-spacing:.05em;
+                     color:var(--bs-secondary-color); font-weight:600; }
+    /* Vertical bar timeline (Bootstrap has no vertical bar chart). */
+    .timeline { display:flex; align-items:flex-end; gap:5px; height:170px; }
+    .timeline .col-bar { flex:1; display:flex; flex-direction:column; align-items:center;
+                         justify-content:flex-end; height:100%; }
+    .timeline .bar { width:72%; min-height:3px; border-radius:4px 4px 0 0; }
+    .timeline .tl-label { font-size:.7rem; color:var(--bs-secondary-color); margin-top:6px;
+                          white-space:nowrap; }
+    .truncate { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:0; }
+    td .progress { min-width:80px; }
   </style>
   {% block head %}{% endblock %}
 </head>
 <body>
-  <header>
-    <span class="brand">EasyLog</span>
-    <nav>
-      <a href="/">Home</a>
-      <a href="/apache">Apache</a>
-      <a href="/sources">Sources</a>
-    </nav>
-  </header>
-  <main>
+  <nav class="navbar navbar-expand-md border-bottom mb-4">
+    <div class="container">
+      <a class="navbar-brand" href="/">
+        <i class="bi bi-stack brand-mark me-1"></i>Easy<span class="brand-mark">Log</span>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+              data-bs-target="#nav" aria-controls="nav" aria-expanded="false"
+              aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="nav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link {% if active == 'home' %}active{% endif %}" href="/">
+              <i class="bi bi-house-door me-1"></i>Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if active == 'apache' %}active{% endif %}" href="/apache">
+              <i class="bi bi-bar-chart me-1"></i>Apache</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if active == 'sources' %}active{% endif %}" href="/sources">
+              <i class="bi bi-hdd-network me-1"></i>Sources</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+  <main class="container pb-5">
     {% block content %}{% endblock %}
   </main>
+  <script src="/static/bootstrap.bundle.min.js"></script>
 </body>
 </html>

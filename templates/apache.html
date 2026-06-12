@@ -1,99 +1,134 @@
-{# apache.html — Apache log dashboard: KPIs, timeline, status mix, top-N. #}
+{# apache.html — Apache log dashboard (Bootstrap): KPIs, timeline, status, top-N. #}
 {% extends "base.html" %}
 {% block title %}Apache — EasyLog{% endblock %}
-{% block head %}
-<style>
-  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px; }
-  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
-  .kpi .val { font-size:26px; font-weight:700; }
-  .kpi .lbl { color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.04em; margin-top:4px; }
-  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
-  h2 { font-size:15px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:0 0 14px; }
-
-  /* Vertical bar timeline */
-  .timeline { display:flex; align-items:flex-end; gap:4px; height:160px; }
-  .tl-col { flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end; }
-  .tl-bar { width:70%; min-height:2px; background:var(--accent); border-radius:3px 3px 0 0; transition:height .2s; }
-  .tl-label { font-size:11px; color:var(--muted); margin-top:6px; white-space:nowrap; }
-
-  /* Horizontal bars (status + top-N) */
-  .hbar-row { display:grid; grid-template-columns:120px 1fr 60px; align-items:center; gap:10px; margin-bottom:9px; }
-  .hbar-row .k { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; }
-  .hbar-row .k.mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; }
-  .hbar-track { background:var(--bg); border-radius:6px; height:18px; overflow:hidden; }
-  .hbar-fill { height:100%; background:var(--accent); border-radius:6px; }
-  .hbar-fill.ok { background:#3fb950; } .hbar-fill.redir { background:#4f9cf9; }
-  .hbar-fill.warn { background:#d8a02a; } .hbar-fill.err { background:#e2555a; }
-  .hbar-row .c { text-align:right; color:var(--muted); font-variant-numeric:tabular-nums; }
-  .topcol .k { grid-column:1 / 2; width:160px; }
-  .topcol .hbar-row { grid-template-columns:160px 1fr 60px; }
-</style>
-{% endblock %}
 {% block content %}
-<h1>Apache</h1>
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0"><i class="bi bi-bar-chart me-2"></i>Apache</h1>
+  <span class="badge text-bg-secondary">Combined Log Format</span>
+</div>
 
 {% if not has_data %}
-  <div class="panel"><div class="empty">No Apache logs yet. Add an Apache
-    <a href="/sources">source</a> and forward access logs over syslog — parsed
-    requests will appear here.</div></div>
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+      No Apache logs yet. Add an Apache <a href="/sources">source</a> and forward
+      access logs over syslog — parsed requests will appear here.
+    </div>
+  </div>
 {% else %}
 
-<div class="kpis">
-  <div class="kpi"><div class="val">{{ kpis.requests }}</div><div class="lbl">Requests</div></div>
-  <div class="kpi"><div class="val">{{ kpis.unique_ips }}</div><div class="lbl">Unique client IPs</div></div>
-  <div class="kpi"><div class="val">{{ kpis.total_bytes }}</div><div class="lbl">Bytes served</div></div>
-  <div class="kpi"><div class="val">{{ kpis.error_rate }}</div><div class="lbl">Error rate (≥400)</div></div>
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-activity me-1"></i>Requests</h6>
+      <div class="stat-value">{{ kpis.requests }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-people me-1"></i>Unique client IPs</h6>
+      <div class="stat-value">{{ kpis.unique_ips }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-download me-1"></i>Bytes served</h6>
+      <div class="stat-value">{{ kpis.total_bytes }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-exclamation-octagon me-1"></i>Error rate (≥400)</h6>
+      <div class="stat-value">{{ kpis.error_rate }}</div>
+    </div></div>
+  </div>
 </div>
 
-<div class="panel">
-  <h2>Requests per hour (last 24h)</h2>
-  {% if timeline | length == 0 %}
-    <div class="empty">No timestamped requests in the last 24 hours of data.</div>
-  {% else %}
-  <div class="timeline">
-    {% for b in timeline %}
-    <div class="tl-col" title="{{ b.label }} — {{ b.count }} requests">
-      <div class="tl-bar" style="height:{{ b.pct }}%"></div>
-      <div class="tl-label">{{ b.label }}</div>
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3">Requests per hour <span class="text-secondary">(last 24h)</span></h6>
+    {% if timeline | length == 0 %}
+      <div class="text-secondary py-3">No timestamped requests in the last 24 hours of data.</div>
+    {% else %}
+    <div class="timeline">
+      {% for b in timeline %}
+      <div class="col-bar" data-bs-toggle="tooltip" title="{{ b.label }} — {{ b.count }} requests">
+        <div class="bar bg-primary" style="height:{{ b.pct }}%"></div>
+        <div class="tl-label">{{ b.label }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3">Status codes</h6>
+    {% for s in statuses %}
+    <div class="d-flex align-items-center mb-2">
+      <div class="fw-semibold" style="width:54px">{{ s.label }}</div>
+      <div class="progress flex-grow-1" role="progressbar" style="height:18px">
+        <div class="progress-bar {{ s.css }}" style="width:{{ s.pct }}%"></div>
+      </div>
+      <div class="text-secondary text-end font-monospace" style="width:64px">{{ s.count }}</div>
     </div>
     {% endfor %}
   </div>
-  {% endif %}
 </div>
 
-<div class="panel">
-  <h2>Status codes</h2>
-  {% for s in statuses %}
-  <div class="hbar-row">
-    <div class="k">{{ s.label }}</div>
-    <div class="hbar-track"><div class="hbar-fill {{ s.css }}" style="width:{{ s.pct }}%"></div></div>
-    <div class="c">{{ s.count }}</div>
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi bi-link-45deg me-1"></i>Top URLs</h6>
+        <table class="table table-sm align-middle mb-0">
+          <tbody>
+            {% for r in top_urls %}
+            <tr>
+              <td class="font-monospace small truncate w-50" title="{{ r.label }}">{{ r.label }}</td>
+              <td class="w-50">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
-  {% endfor %}
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi bi-pc-display me-1"></i>Top client IPs</h6>
+        <table class="table table-sm align-middle mb-0">
+          <tbody>
+            {% for r in top_ips %}
+            <tr>
+              <td class="font-monospace small truncate w-50" title="{{ r.label }}">{{ r.label }}</td>
+              <td class="w-50">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
-<div class="grid2">
-  <div class="panel topcol">
-    <h2>Top URLs</h2>
-    {% for u in top_urls %}
-    <div class="hbar-row">
-      <div class="k mono" title="{{ u.label }}">{{ u.label }}</div>
-      <div class="hbar-track"><div class="hbar-fill" style="width:{{ u.pct }}%"></div></div>
-      <div class="c">{{ u.count }}</div>
-    </div>
-    {% endfor %}
-  </div>
-  <div class="panel topcol">
-    <h2>Top client IPs</h2>
-    {% for ip in top_ips %}
-    <div class="hbar-row">
-      <div class="k mono" title="{{ ip.label }}">{{ ip.label }}</div>
-      <div class="hbar-track"><div class="hbar-fill" style="width:{{ ip.pct }}%"></div></div>
-      <div class="c">{{ ip.count }}</div>
-    </div>
-    {% endfor %}
-  </div>
-</div>
+<script>
+  // Enable Bootstrap tooltips on the timeline bars.
+  document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    .forEach(el => new bootstrap.Tooltip(el));
+</script>
 
 {% endif %}
 {% endblock %}

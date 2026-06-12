@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `EASYLOG_CONFIG`.
 
 ### Changed
+- **Professional Bootstrap 5.3 UI** (dark theme): rebuilt all pages on Bootstrap
+  components — responsive navbar, cards, tables, forms, badges, and progress-bar
+  charts. Bootstrap CSS/JS and Bootstrap Icons are vendored under `static/` and
+  served locally (`/static`, via `tower-http`), so the UI works fully offline.
 - Syslog routing resolves the log type from the DB-backed source map (by source
   IP), configured via the web UI rather than a static config table.
 - **Decoupled syslog ingestion:** the UDP/TCP receive loops no longer write to

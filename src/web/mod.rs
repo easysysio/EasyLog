@@ -18,6 +18,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
+use tower_http::services::ServeDir;
 
 use crate::sources::{self, Source};
 use crate::state::AppState;
@@ -37,6 +38,7 @@ pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
         .route("/sources/delete", post(delete_source))
         .route("/apache", get(apache::dashboard))
         .route("/apache/recent", get(apache_recent))
+        .nest_service("/static", ServeDir::new("static"))
         .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");
@@ -61,6 +63,7 @@ async fn health() -> &'static str {
 async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
     let count = state.sources.read().expect("sources lock poisoned").len();
     let mut ctx = tera::Context::new();
+    ctx.insert("active", "home");
     ctx.insert("source_count", &count);
     ctx.insert("log_types", &state.registry.names());
     Ok(Html(state.tera.render("index.html", &ctx)?))
@@ -146,6 +149,7 @@ fn render_sources(state: &Arc<AppState>, error: Option<String>) -> Result<Html<S
     list.sort_by(|a, b| a.name.cmp(&b.name));
 
     let mut ctx = tera::Context::new();
+    ctx.insert("active", "sources");
     ctx.insert("sources", &list);
     ctx.insert("log_types", &state.registry.names());
     if let Some(e) = error {
