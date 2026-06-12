@@ -1,0 +1,24 @@
+# EasyLog configuration
+#
+# Copy/edit this file; EasyLog loads config/easylog.toml by default
+# (override with the EASYLOG_CONFIG environment variable).
+
+# Address the syslog listeners (UDP + TCP) bind to.
+syslog_bind = "0.0.0.0"
+
+# Syslog port. 514 is standard but requires privileges to bind (<1024).
+# For local testing without root, set this to e.g. 5514.
+syslog_port = 514
+
+# Port for the web UI / dashboards.
+web_port = 3000
+
+# DuckDB database file.
+db_path = "easylog.duckdb"
+
+# Source host/IP → log-type routing.
+# Each sending host is mapped to the log type EasyLog should parse it as.
+# Keys may be an IP (matched against the network peer) or a syslog hostname.
+[hosts]
+"127.0.0.1" = "apache"
+# "192.168.1.10" = "apache"

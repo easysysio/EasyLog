@@ -1,68 +1,72 @@
 // =============================================================================
-// main.rs — EasyLog web service entry point
+// main.rs — EasyLog entry point
 //
-// Boots the Axum HTTP server for the EasyLog log analyzer. Initializes tracing,
-// builds the router, and serves on 0.0.0.0:3000. This is the minimal scaffold:
-// only root and health routes exist so far — parsing/analysis comes later.
+// Boots the EasyLog multi-log analyzer: loads config, opens DuckDB, initializes
+// every log type's schema, then runs the syslog listeners (UDP + TCP) and the
+// Axum web server concurrently over shared state. Stage 1 supports the Apache
+// log type end-to-end (ingest → store); dashboards arrive in Stage 2.
 // =============================================================================
 
-use axum::{Router, routing::get};
-use tokio::net::TcpListener;
+mod config;
+mod logtype;
+mod state;
+mod storage;
+mod syslog;
+mod web;
 
-// Address the server binds to. Kept as a const for now; will move to config later.
-const BIND_ADDR: &str = "0.0.0.0:3000";
+use std::sync::{Arc, Mutex};
+
+use anyhow::Result;
+
+use crate::config::Config;
+use crate::logtype::Registry;
+use crate::state::AppState;
+
+// Default config path; overridable via the EASYLOG_CONFIG env var.
+const DEFAULT_CONFIG: &str = "config/easylog.toml";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // main()
-// Process entry point. Sets up logging, constructs the router, binds the TCP
-// listener, and runs the Axum server until the process is terminated.
+// Process entry point: initialize logging and shared state, then run the syslog
+// listeners and web server until either exits.
 // ─────────────────────────────────────────────────────────────────────────────
 #[tokio::main]
-async fn main() {
-    // Initialize tracing. RUST_LOG controls verbosity; defaults to `info`.
+async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
-    let app = build_router();
+    let config_path = std::env::var("EASYLOG_CONFIG").unwrap_or_else(|_| DEFAULT_CONFIG.to_string());
+    let config = Config::load(&config_path)?;
+    tracing::info!(
+        "config: syslog {}:{} (udp+tcp), web :{}, db {}, {} host route(s)",
+        config.syslog_bind,
+        config.syslog_port,
+        config.web_port,
+        config.db_path,
+        config.hosts.len(),
+    );
 
-    let listener = TcpListener::bind(BIND_ADDR)
-        .await
-        .expect("failed to bind listener");
+    let registry = Registry::with_defaults();
+    let conn = storage::open(&config.db_path)?;
+    registry.init_all(&conn)?;
 
-    tracing::info!("EasyLog listening on http://{BIND_ADDR}");
+    let state = Arc::new(AppState {
+        config,
+        registry,
+        db: Mutex::new(conn),
+    });
 
-    axum::serve(listener, app)
-        .await
-        .expect("server error");
-}
+    // Run syslog ingestion and the web server concurrently; if either fails,
+    // propagate the error and shut down.
+    let syslog_state = state.clone();
+    let web_state = state.clone();
+    tokio::try_join!(
+        syslog::serve(syslog_state),
+        web::serve(web_state),
+    )?;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// build_router()
-// Assembles the application's route table. Centralized here so routes are easy
-// to find and unit-test as the service grows.
-// ─────────────────────────────────────────────────────────────────────────────
-fn build_router() -> Router {
-    Router::new()
-        .route("/", get(root))
-        .route("/health", get(health))
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /
-// Landing route — returns a plain-text banner identifying the service.
-// ─────────────────────────────────────────────────────────────────────────────
-async fn root() -> &'static str {
-    "EasyLog — Log analyzer"
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /health
-// Liveness probe — returns 200 "ok" so orchestrators can check the service.
-// ─────────────────────────────────────────────────────────────────────────────
-async fn health() -> &'static str {
-    "ok"
+    Ok(())
 }

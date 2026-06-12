@@ -1,0 +1,95 @@
+// =============================================================================
+// config.rs — EasyLog runtime configuration
+//
+// Loads settings from a TOML file (default: config/easylog.toml). Holds the
+// syslog listener bind address/port, the web server port, the DuckDB path, and
+// the source-host → log-type routing map used to dispatch incoming messages.
+// =============================================================================
+
+use anyhow::{Context, Result};
+use serde::Deserialize;
+use std::collections::HashMap;
+use std::path::Path;
+
+// Top-level configuration loaded from TOML. Fields default (see `default_*`)
+// so a partial or missing config still yields a runnable server.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Config {
+    /// Address the syslog listeners bind to (UDP + TCP).
+    #[serde(default = "default_bind")]
+    pub syslog_bind: String,
+    /// Syslog port. Standard is 514 (requires privileges to bind <1024).
+    #[serde(default = "default_syslog_port")]
+    pub syslog_port: u16,
+    /// Port the Axum web/dashboard server listens on.
+    #[serde(default = "default_web_port")]
+    pub web_port: u16,
+    /// Path to the DuckDB database file.
+    #[serde(default = "default_db_path")]
+    pub db_path: String,
+    /// Map of source host/IP → log-type name (e.g. "192.168.1.10" = "apache").
+    #[serde(default)]
+    pub hosts: HashMap<String, String>,
+}
+
+fn default_bind() -> String {
+    "0.0.0.0".to_string()
+}
+fn default_syslog_port() -> u16 {
+    514
+}
+fn default_web_port() -> u16 {
+    3000
+}
+fn default_db_path() -> String {
+    "easylog.duckdb".to_string()
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            syslog_bind: default_bind(),
+            syslog_port: default_syslog_port(),
+            web_port: default_web_port(),
+            db_path: default_db_path(),
+            hosts: HashMap::new(),
+        }
+    }
+}
+
+impl Config {
+    // ─────────────────────────────────────────────────────────────────────────
+    // Config::load(path)
+    // Reads and parses the TOML config at `path`. If the file does not exist,
+    // returns defaults so the server can still boot for local experimentation.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn load(path: impl AsRef<Path>) -> Result<Config> {
+        let path = path.as_ref();
+        if !path.exists() {
+            tracing::warn!("config {} not found — using defaults", path.display());
+            return Ok(Config::default());
+        }
+        let text = std::fs::read_to_string(path)
+            .with_context(|| format!("reading config {}", path.display()))?;
+        let cfg: Config =
+            toml::from_str(&text).with_context(|| format!("parsing config {}", path.display()))?;
+        Ok(cfg)
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Config::log_type_for(ip, hostname)
+    // Resolves a log-type name for an incoming message by matching the network
+    // peer IP first, then the syslog-reported hostname, against the host map.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn log_type_for(&self, ip: &str, hostname: Option<&str>) -> Option<&str> {
+        if let Some(t) = self.hosts.get(ip) {
+            return Some(t.as_str());
+        }
+        if let Some(h) = hostname {
+            if let Some(t) = self.hosts.get(h) {
+                return Some(t.as_str());
+            }
+        }
+        None
+    }
+}
