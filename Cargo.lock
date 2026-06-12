@@ -660,6 +660,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "socket2",
  "syslog_loose",
  "tera",
  "tokio",

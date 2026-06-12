@@ -34,6 +34,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Syslog routing resolves the log type from the DB-backed source map (by source
   IP), configured via the web UI rather than a static config table.
+- **Decoupled syslog ingestion:** the UDP/TCP receive loops no longer write to
+  DuckDB inline. They parse the envelope, resolve the log type, and push a work
+  item onto a bounded `tokio::sync::mpsc` channel; a dedicated background writer
+  task drains the channel and inserts rows in batched transactions (up to 1024
+  items per `BEGIN/COMMIT`), amortizing the DB lock and per-statement commit
+  cost. The UDP socket is built via `socket2` with an enlarged receive buffer
+  (best-effort `SO_RCVBUF`, requested 8 MiB) as a secondary burst mitigation.
+
+### Fixed
+- **UDP packet loss under bursts:** each datagram used to be inserted
+  synchronously while the single UDP recv loop held the DuckDB mutex, so a
+  no-delay burst stalled the loop and the kernel dropped incoming datagrams
+  (a ~29-packet burst could land 0 rows, while spacing sends 10 ms apart landed
+  all of them). With receiving now decoupled from writing, the recv loop drains
+  the socket fast: a 500-packet no-delay burst lands all 500. Bursts beyond the
+  OS UDP socket-buffer ceiling are still subject to kernel-level drops (inherent
+  to UDP), but no longer to writer back-pressure.
 
 ## [0.1.0] — 2026-06-12
 
