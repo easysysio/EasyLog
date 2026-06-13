@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Apache Common Log Format support.** The parser now accepts both Common
+  (`%h %l %u %t "%r" %>s %b`) and Combined formats — the trailing referer and
+  user-agent are optional. Previously Common-format lines (e.g. from
+  `mod_autoindex` / default vhosts) were dropped as unparseable.
+
 ### Fixed
 - **Service failed to start after a package upgrade (`status=200/CHDIR`).** The
   packages had no post-install hook, so `systemctl daemon-reload` never ran on

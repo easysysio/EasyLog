@@ -1,11 +1,13 @@
 // =============================================================================
-// logtype/apache.rs — Apache Combined Log Format parser + DuckDB storage
+// logtype/apache.rs — Apache access-log parser (Common + Combined) + DuckDB
 //
-// Implements the first EasyLog log type. Parses the Apache "combined" access
-// log line (the syslog MSG field), splits the request into method/path/protocol,
-// parses the timestamp, and inserts a typed row into the `apache` DuckDB table.
-// Combined format:
-//   %h %l %u %t "%r" %>s %b "%{Referer}i" "%{User-agent}i"
+// Implements the first EasyLog log type. Parses an Apache access-log line (the
+// syslog MSG field), splits the request into method/path/protocol, parses the
+// timestamp, and inserts a typed row into the `apache` DuckDB table. Both the
+// Common and Combined Log Formats are accepted — the trailing referer and
+// user-agent fields are optional:
+//   Common:   %h %l %u %t "%r" %>s %b
+//   Combined: %h %l %u %t "%r" %>s %b "%{Referer}i" "%{User-agent}i"
 // =============================================================================
 
 use anyhow::Result;
@@ -35,24 +37,26 @@ pub struct ApacheEntry {
     pub user_agent: String,
 }
 
-// Lazily-compiled regex for the combined log format. Compiled once, reused for
-// every line. Capture groups map 1:1 to the format fields above.
+// Lazily-compiled regex for Apache access lines. Compiled once, reused for every
+// line. The trailing referer + user-agent pair is optional, so both Common and
+// Combined Log Format match; the referer/ua capture groups are absent for Common.
 fn line_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r#"^(?P<host>\S+) (?P<ident>\S+) (?P<user>\S+) \[(?P<time>[^\]]+)\] "(?P<req>[^"]*)" (?P<status>\d{3}|-) (?P<bytes>\d+|-) "(?P<ref>[^"]*)" "(?P<ua>[^"]*)""#,
+            r#"^(?P<host>\S+) (?P<ident>\S+) (?P<user>\S+) \[(?P<time>[^\]]+)\] "(?P<req>[^"]*)" (?P<status>\d{3}|-) (?P<bytes>\d+|-)(?: "(?P<ref>[^"]*)" "(?P<ua>[^"]*)")?"#,
         )
-        .expect("apache combined-format regex is valid")
+        .expect("apache access-log regex is valid")
     })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// parse_combined(line)
-// Parses a single Apache combined-format access-log line into an ApacheEntry.
-// Returns None if the line does not match the expected shape.
+// parse_line(line)
+// Parses a single Apache access-log line (Common or Combined) into an
+// ApacheEntry. Returns None if the line does not match the expected shape. For
+// Common-format lines the referer and user-agent are absent and stored empty.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn parse_combined(line: &str) -> Option<ApacheEntry> {
+pub fn parse_line(line: &str) -> Option<ApacheEntry> {
     let caps = line_regex().captures(line.trim())?;
 
     // Request line "METHOD PATH PROTOCOL" — may be malformed or "-".
@@ -70,6 +74,10 @@ pub fn parse_combined(line: &str) -> Option<ApacheEntry> {
     let status = caps["status"].parse::<i32>().ok();
     let bytes = caps["bytes"].parse::<i64>().ok();
 
+    // Referer/user-agent are only present in Combined format.
+    let referer = caps.name("ref").map_or(String::new(), |m| m.as_str().to_string());
+    let user_agent = caps.name("ua").map_or(String::new(), |m| m.as_str().to_string());
+
     Some(ApacheEntry {
         remote_host: caps["host"].to_string(),
         ident: caps["ident"].to_string(),
@@ -80,8 +88,8 @@ pub fn parse_combined(line: &str) -> Option<ApacheEntry> {
         protocol,
         status,
         bytes,
-        referer: caps["ref"].to_string(),
-        user_agent: caps["ua"].to_string(),
+        referer,
+        user_agent,
     })
 }
 
@@ -121,11 +129,11 @@ impl LogType for Apache {
 
     // ─────────────────────────────────────────────────────────────────────────
     // Apache::ingest(raw, meta, conn)
-    // Parses one combined-format line and inserts it into the `apache` table.
-    // Returns Ok(false) when the line cannot be parsed (a drop, not an error).
+    // Parses one access-log line (Common or Combined) and inserts it into the
+    // `apache` table. Returns Ok(false) when the line cannot be parsed (a drop).
     // ─────────────────────────────────────────────────────────────────────────
     fn ingest(&self, raw: &str, meta: &Meta, conn: &Connection) -> Result<bool> {
-        let Some(e) = parse_combined(raw) else {
+        let Some(e) = parse_line(raw) else {
             return Ok(false);
         };
         conn.execute(
@@ -161,7 +169,7 @@ mod tests {
     #[test]
     fn parses_canonical_combined_line() {
         let line = r#"127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)""#;
-        let e = parse_combined(line).expect("should parse");
+        let e = parse_line(line).expect("should parse");
         assert_eq!(e.remote_host, "127.0.0.1");
         assert_eq!(e.auth_user, "frank");
         assert_eq!(e.method, "GET");
@@ -175,9 +183,24 @@ mod tests {
     }
 
     #[test]
+    fn parses_common_log_format() {
+        // Common Log Format — no trailing referer/user-agent (e.g. mod_autoindex).
+        let line = r#"192.168.1.73 - - [13/Jun/2026:15:59:18 +0000] "GET /stable/ HTTP/1.1" 200 537"#;
+        let e = parse_line(line).expect("should parse common format");
+        assert_eq!(e.remote_host, "192.168.1.73");
+        assert_eq!(e.method, "GET");
+        assert_eq!(e.path, "/stable/");
+        assert_eq!(e.status, Some(200));
+        assert_eq!(e.bytes, Some(537));
+        assert_eq!(e.referer, "");
+        assert_eq!(e.user_agent, "");
+        assert!(e.ts.is_some());
+    }
+
+    #[test]
     fn handles_dash_bytes_and_empty_user() {
         let line = r#"10.0.0.5 - - [12/Jun/2026:09:00:00 +0000] "POST /api/login HTTP/1.1" 401 - "-" "curl/8.0""#;
-        let e = parse_combined(line).expect("should parse");
+        let e = parse_line(line).expect("should parse");
         assert_eq!(e.auth_user, "-");
         assert_eq!(e.method, "POST");
         assert_eq!(e.status, Some(401));
@@ -187,6 +210,6 @@ mod tests {
 
     #[test]
     fn rejects_non_apache_line() {
-        assert!(parse_combined("this is not an apache log line").is_none());
+        assert!(parse_line("this is not an apache log line").is_none());
     }
 }
