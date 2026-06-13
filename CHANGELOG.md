@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Dashboard time-range selector** (`?range=`): bound the whole Apache dashboard
+  to the last **hour / 24h (default) / week / month / year**. The window is
+  applied to every aggregation (requests, KPIs, status, top-N), the timeline
+  re-buckets to suit the range (5-min → hour → day → month), and the range is
+  preserved across drill-down filters.
 - Browser **favicon** matching the navbar mark (the `bi-stack` glyph in the brand
   blue, an embedded SVG), served at `/static/favicon.svg` and `/favicon.ico`.
 
