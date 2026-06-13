@@ -1,0 +1,14 @@
+#!/bin/sh
+# postinst — reload systemd and restart EasyLog after install/upgrade so the new
+# unit file and binary take effect (cargo-deb adds no systemd hooks by default).
+set -e
+
+if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    # On upgrades, restart if the unit is already enabled; a no-op on first install.
+    if systemctl is-enabled easylog.service >/dev/null 2>&1; then
+        systemctl try-restart easylog.service >/dev/null 2>&1 || true
+    fi
+fi
+
+exit 0

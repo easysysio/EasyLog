@@ -38,6 +38,7 @@ section = "utils"
 priority = "optional"
 depends = "$auto"
 conf-files = ["/etc/easylog/easylog.toml"]
+maintainer-scripts = "packaging/deb"
 assets = [
     ["target/release/easylog", "usr/bin/", "755"],
     ["packaging/easylog.toml", "etc/easylog/easylog.toml", "644"],
@@ -50,6 +51,13 @@ assets = [
 [package.metadata.generate-rpm]
 summary = "EasyLog — a multi-log analyzer (syslog ingest, dashboard per log type)"
 auto-req = "no"
+# Reload systemd and restart on install/upgrade so the new unit + binary apply.
+post_install_script = """
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl try-restart easylog.service >/dev/null 2>&1 || true
+fi
+"""
 assets = [
     { source = "target/release/easylog", dest = "/usr/bin/easylog", mode = "755" },
     { source = "packaging/easylog.toml", dest = "/etc/easylog/easylog.toml", mode = "644", config = true },

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Service failed to start after a package upgrade (`status=200/CHDIR`).** The
+  packages had no post-install hook, so `systemctl daemon-reload` never ran on
+  upgrade and systemd kept the previous unit (whose `WorkingDirectory` the new
+  package had removed). The deb/rpm now run `daemon-reload` + `try-restart` on
+  install/upgrade. (Upgrading *to* this version still needs a one-time manual
+  `systemctl daemon-reload && systemctl restart easylog`.)
+
 ## [0.1.2] — 2026-06-13
 
 ### Added
