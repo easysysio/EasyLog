@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **systemd unit failed to start (`status=217/USER`) in LXC/containers:** the unit
+  used `DynamicUser=yes` and mount-namespace sandboxing, which are unreliable in
+  LXC. It now runs as root (normal for a syslog collector binding :514) with only
+  `StateDirectory` + `NoNewPrivileges`, so it starts portably across hosts and
+  containers.
+
 ### Changed
 - Rewrote `README.md` with a professional structure: features, architecture
   diagram, package/source installation, configuration, usage (including Apache
