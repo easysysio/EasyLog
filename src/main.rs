@@ -3,8 +3,10 @@
 //
 // Boots the EasyLog multi-log analyzer: loads config, opens DuckDB, initializes
 // each log type's schema and the source registry, loads sources into memory,
-// builds the Tera template engine, then runs the syslog listeners (UDP + TCP)
-// and the Axum web server concurrently over shared state.
+// builds the Tera engine from templates embedded in the binary, then runs the
+// syslog listeners (UDP + TCP) and the Axum web server over shared state. The
+// web templates and static assets are compiled in, so EasyLog runs as a single
+// self-contained binary with nothing to install alongside it.
 // =============================================================================
 
 mod config;
@@ -29,6 +31,25 @@ use crate::state::AppState;
 const DEFAULT_CONFIG: &str = "config/easylog.toml";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// load_templates()
+// Builds the Tera engine from templates compiled into the binary (include_str!),
+// so EasyLog needs no templates/ directory on disk at runtime.
+// ─────────────────────────────────────────────────────────────────────────────
+fn load_templates() -> Result<Tera> {
+    let mut tera = Tera::default();
+    tera.add_raw_templates(vec![
+        ("base.html", include_str!("../templates/base.html")),
+        ("index.html", include_str!("../templates/index.html")),
+        ("sources.html", include_str!("../templates/sources.html")),
+        ("apache.html", include_str!("../templates/apache.html")),
+    ])
+    .context("registering embedded templates")?;
+    // Preserve HTML auto-escaping (Tera::new enables this for .html by default).
+    tera.autoescape_on(vec![".html"]);
+    Ok(tera)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // main()
 // Process entry point: initialize logging and shared state, then run the syslog
 // listeners and web server until either exits.
@@ -51,8 +72,8 @@ async fn main() -> Result<()> {
     sources::init_schema(&conn)?;
     let source_map: HashMap<String, sources::Source> = sources::load_map(&conn)?;
 
-    // Load the web templates.
-    let tera = Tera::new("templates/**/*.html").context("loading templates")?;
+    // Build the Tera engine from templates embedded in the binary.
+    let tera = load_templates()?;
 
     tracing::info!(
         "config: syslog {}:{} (udp+tcp), web :{}, db {}, {} source(s)",

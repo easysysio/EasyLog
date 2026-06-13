@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Single self-contained binary:** the web templates and static assets
+  (Bootstrap + icons) are now compiled into the binary (`include_str!` /
+  `include_bytes!`) and served from memory, so EasyLog no longer needs
+  `templates/` or `static/` on disk. The deb/rpm ship only the binary, config,
+  and systemd unit (which drops its `WorkingDirectory`); the `tower-http`
+  dependency was removed.
+
 ## [0.1.1] — 2026-06-13
 
 ### Fixed

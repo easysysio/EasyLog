@@ -11,19 +11,25 @@ use std::sync::Arc;
 
 use axum::{
     Form, Json, Router,
-    extract::State,
-    http::StatusCode,
-    response::{Html, IntoResponse, Redirect},
+    extract::{Path, State},
+    http::{StatusCode, header},
+    response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
-use tower_http::services::ServeDir;
 
 use crate::sources::{self, Source};
 use crate::state::AppState;
 
 mod apache;
+
+// Web assets compiled into the binary so the UI is served with no static/
+// directory on disk (single self-contained binary).
+const BOOTSTRAP_CSS: &[u8] = include_bytes!("../../static/bootstrap.min.css");
+const BOOTSTRAP_JS: &[u8] = include_bytes!("../../static/bootstrap.bundle.min.js");
+const ICONS_CSS: &[u8] = include_bytes!("../../static/bootstrap-icons.css");
+const ICONS_FONT: &[u8] = include_bytes!("../../static/fonts/bootstrap-icons.woff2");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // serve(state)
@@ -38,7 +44,7 @@ pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
         .route("/sources/delete", post(delete_source))
         .route("/apache", get(apache::dashboard))
         .route("/apache/recent", get(apache_recent))
-        .nest_service("/static", ServeDir::new("static"))
+        .route("/static/{*path}", get(static_asset))
         .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");
@@ -54,6 +60,22 @@ pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
 // ─────────────────────────────────────────────────────────────────────────────
 async fn health() -> &'static str {
     "ok"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /static/{*path}
+// Serves a compiled-in web asset by path with the right content type; 404 for
+// anything not embedded.
+// ─────────────────────────────────────────────────────────────────────────────
+async fn static_asset(Path(path): Path<String>) -> Response {
+    let (bytes, ctype): (&'static [u8], &str) = match path.as_str() {
+        "bootstrap.min.css" => (BOOTSTRAP_CSS, "text/css; charset=utf-8"),
+        "bootstrap.bundle.min.js" => (BOOTSTRAP_JS, "text/javascript; charset=utf-8"),
+        "bootstrap-icons.css" => (ICONS_CSS, "text/css; charset=utf-8"),
+        "fonts/bootstrap-icons.woff2" => (ICONS_FONT, "font/woff2"),
+        _ => return StatusCode::NOT_FOUND.into_response(),
+    };
+    ([(header::CONTENT_TYPE, ctype)], bytes).into_response()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

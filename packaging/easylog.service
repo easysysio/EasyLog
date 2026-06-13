@@ -8,8 +8,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# Templates and static assets are loaded relative to this directory.
-WorkingDirectory=/usr/share/easylog
+# EasyLog is a self-contained binary (templates + static assets are embedded),
+# so no special working directory is needed.
 Environment=EASYLOG_CONFIG=/etc/easylog/easylog.toml
 ExecStart=/usr/bin/easylog
 Restart=on-failure

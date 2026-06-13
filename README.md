@@ -81,8 +81,7 @@ The package installs:
 
 | Path | Contents |
 |------|----------|
-| `/usr/bin/easylog` | the binary |
-| `/usr/share/easylog/` | templates + static web assets |
+| `/usr/bin/easylog` | the binary (web UI + assets embedded) |
 | `/etc/easylog/easylog.toml` | default configuration |
 | `/usr/lib/systemd/system/easylog.service` | systemd unit |
 | `/var/lib/easylog/` | DuckDB database (created at runtime) |
