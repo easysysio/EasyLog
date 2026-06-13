@@ -1,4 +1,6 @@
-{# apache.html — Apache log dashboard (Bootstrap): KPIs, timeline, status, top-N. #}
+{# apache.html — Apache log dashboard (Bootstrap): KPIs, timeline, status, top-N.
+   Top URLs, client IPs, and status codes are drill-down links that filter the
+   whole dashboard; active filters show as removable chips. #}
 {% extends "base.html" %}
 {% block title %}Apache — EasyLog{% endblock %}
 {% block content %}
@@ -13,6 +15,27 @@
       <i class="bi bi-inbox fs-2 d-block mb-2"></i>
       No Apache logs yet. Add an Apache <a href="/sources">source</a> and forward
       access logs over syslog — parsed requests will appear here.
+    </div>
+  </div>
+{% else %}
+
+{% if has_filters %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-funnel me-1"></i>Filters</span>
+  {% for c in chips %}
+  <a href="{{ c.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
+    {{ c.label }} <i class="bi bi-x-lg ms-1"></i>
+  </a>
+  {% endfor %}
+  <a href="/apache" class="small text-decoration-none ms-1">Clear all</a>
+</div>
+{% endif %}
+
+{% if kpis.requests == 0 %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-search fs-2 d-block mb-2"></i>
+      No requests match the current filter.
     </div>
   </div>
 {% else %}
@@ -64,15 +87,16 @@
 
 <div class="card mb-4">
   <div class="card-body">
-    <h6 class="section-title mb-3">Status codes</h6>
+    <h6 class="section-title mb-3">Status codes <span class="text-secondary">(click to filter)</span></h6>
     {% for s in statuses %}
-    <div class="d-flex align-items-center mb-2">
+    <a href="{{ s.href }}" class="d-flex align-items-center mb-2 text-decoration-none text-reset"
+       title="Filter to {{ s.label }}">
       <div class="fw-semibold" style="width:54px">{{ s.label }}</div>
       <div class="progress flex-grow-1" role="progressbar" style="height:18px">
         <div class="progress-bar {{ s.css }}" style="width:{{ s.pct }}%"></div>
       </div>
       <div class="text-secondary text-end font-monospace" style="width:64px">{{ s.count }}</div>
-    </div>
+    </a>
     {% endfor %}
   </div>
 </div>
@@ -81,12 +105,14 @@
   <div class="col-lg-6">
     <div class="card h-100">
       <div class="card-body">
-        <h6 class="section-title mb-3"><i class="bi bi-link-45deg me-1"></i>Top URLs</h6>
-        <table class="table table-sm align-middle mb-0">
+        <h6 class="section-title mb-3"><i class="bi bi-link-45deg me-1"></i>Top URLs <span class="text-secondary">(click to filter)</span></h6>
+        <table class="table table-sm table-hover align-middle mb-0">
           <tbody>
             {% for r in top_urls %}
             <tr>
-              <td class="font-monospace small truncate w-50" title="{{ r.label }}">{{ r.label }}</td>
+              <td class="font-monospace small truncate w-50">
+                <a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a>
+              </td>
               <td class="w-50">
                 <div class="progress" style="height:14px">
                   <div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div>
@@ -103,12 +129,14 @@
   <div class="col-lg-6">
     <div class="card h-100">
       <div class="card-body">
-        <h6 class="section-title mb-3"><i class="bi bi-pc-display me-1"></i>Top client IPs</h6>
-        <table class="table table-sm align-middle mb-0">
+        <h6 class="section-title mb-3"><i class="bi bi-pc-display me-1"></i>Top client IPs <span class="text-secondary">(click to filter)</span></h6>
+        <table class="table table-sm table-hover align-middle mb-0">
           <tbody>
             {% for r in top_ips %}
             <tr>
-              <td class="font-monospace small truncate w-50" title="{{ r.label }}">{{ r.label }}</td>
+              <td class="font-monospace small truncate w-50">
+                <a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a>
+              </td>
               <td class="w-50">
                 <div class="progress" style="height:14px">
                   <div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div>
@@ -130,5 +158,6 @@
     .forEach(el => new bootstrap.Tooltip(el));
 </script>
 
-{% endif %}
+{% endif %}{# requests == 0 #}
+{% endif %}{# not has_data #}
 {% endblock %}

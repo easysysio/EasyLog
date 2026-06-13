@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   containers.
 
 ### Added
+- **Dashboard drill-down filters:** clicking a client IP, URL, or status code on
+  the Apache dashboard filters the entire dashboard to matching requests
+  (`/apache?ip=…&path=…&status=…`). Filters stack across dimensions, show as
+  removable chips with a "Clear all", and a "no requests match" state keeps the
+  filter bar reachable. Filter values are bound as SQL parameters.
 - `examples/rsyslog/apache-access.conf` — ready-to-edit rsyslog config for
   forwarding Apache access logs to EasyLog (also shipped in the deb/rpm under
   `/usr/share/doc/easylog/examples/`).
