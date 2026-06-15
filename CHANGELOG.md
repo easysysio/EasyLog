@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Authentication.** The web UI is now gated behind a single admin account. On
+  first run a `/setup` page creates the admin (bcrypt-hashed); afterwards `/login`
+  is required, with a Logout button in the navbar. Sessions are stateless signed
+  cookies (HttpOnly, SameSite=Lax); the signing key is generated once and
+  persisted, so logins survive restarts. `/health` and `/static` stay public, and
+  **syslog ingestion is unaffected** — only the web UI is protected.
 - **Version badge** in the lower-right corner of every page, showing the running
   EasyLog version (`{{ version() }}`, from the crate version at compile time).
 

@@ -9,18 +9,23 @@
 
 use std::sync::Arc;
 
+use std::sync::atomic::Ordering;
+
 use axum::{
     Form, Json, Router,
-    extract::{Path, State},
+    extract::{Path, Request, State},
     http::{StatusCode, header},
+    middleware::{self, Next},
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
 };
+use axum_extra::extract::cookie::{Cookie, SameSite, SignedCookieJar};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 
+use crate::auth;
 use crate::sources::{self, Source};
-use crate::state::AppState;
+use crate::state::{AppState, WebState};
 
 mod apache;
 
@@ -38,16 +43,30 @@ const FAVICON: &[u8] = include_bytes!("../../static/favicon.svg");
 // ─────────────────────────────────────────────────────────────────────────────
 pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
     let port = state.config.web_port;
-    let app = Router::new()
+
+    // Routes that require an authenticated session.
+    let protected = Router::new()
         .route("/", get(home))
-        .route("/health", get(health))
         .route("/sources", get(sources_page).post(add_source))
         .route("/sources/delete", post(delete_source))
         .route("/apache", get(apache::dashboard))
         .route("/apache/recent", get(apache_recent))
-        .route("/static/{*path}", get(static_asset))
+        .route_layer(middleware::from_fn_with_state(
+            WebState(state.clone()),
+            require_auth,
+        ));
+
+    // Public routes: auth pages, health probe, and the embedded assets needed to
+    // render the login/setup pages.
+    let app = Router::new()
+        .route("/login", get(login_page).post(login_submit))
+        .route("/setup", get(setup_page).post(setup_submit))
+        .route("/logout", post(logout))
+        .route("/health", get(health))
         .route("/favicon.ico", get(favicon))
-        .with_state(state);
+        .route("/static/{*path}", get(static_asset))
+        .merge(protected)
+        .with_state(WebState(state));
 
     let addr = format!("0.0.0.0:{port}");
     let listener = TcpListener::bind(&addr).await?;
@@ -88,6 +107,132 @@ async fn static_asset(Path(path): Path<String>) -> Response {
 // ─────────────────────────────────────────────────────────────────────────────
 async fn favicon() -> Response {
     ([(header::CONTENT_TYPE, "image/svg+xml")], FAVICON).into_response()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// require_auth — middleware guarding the protected routes
+// Redirects to /setup until the admin exists, then to /login unless a valid
+// signed session cookie is present.
+// ─────────────────────────────────────────────────────────────────────────────
+async fn require_auth(
+    State(state): State<Arc<AppState>>,
+    jar: SignedCookieJar,
+    req: Request,
+    next: Next,
+) -> Response {
+    if state.needs_setup.load(Ordering::Relaxed) {
+        return Redirect::to("/setup").into_response();
+    }
+    if jar.get("session").is_some() {
+        next.run(req).await
+    } else {
+        Redirect::to("/login").into_response()
+    }
+}
+
+// Builds a signed session cookie carrying the logged-in username.
+fn session_cookie(username: String) -> Cookie<'static> {
+    Cookie::build(("session", username))
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .path("/")
+        .build()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /login  — sign-in form (redirects to /setup on first run).
+// ─────────────────────────────────────────────────────────────────────────────
+async fn login_page(State(state): State<Arc<AppState>>) -> Result<Response, AppError> {
+    if state.needs_setup.load(Ordering::Relaxed) {
+        return Ok(Redirect::to("/setup").into_response());
+    }
+    Ok(Html(state.tera.render("login.html", &tera::Context::new())?).into_response())
+}
+
+#[derive(Deserialize)]
+struct LoginForm {
+    username: String,
+    password: String,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /login — verify credentials; on success set the session cookie.
+// ─────────────────────────────────────────────────────────────────────────────
+async fn login_submit(
+    State(state): State<Arc<AppState>>,
+    jar: SignedCookieJar,
+    Form(form): Form<LoginForm>,
+) -> Result<Response, AppError> {
+    let ok = {
+        let conn = state.db.lock().expect("db mutex poisoned");
+        auth::verify_credentials(&conn, &form.username, &form.password)?
+    };
+    if ok {
+        let jar = jar.add(session_cookie(form.username.trim().to_string()));
+        Ok((jar, Redirect::to("/")).into_response())
+    } else {
+        let mut ctx = tera::Context::new();
+        ctx.insert("error", "Invalid username or password.");
+        Ok(Html(state.tera.render("login.html", &ctx)?).into_response())
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /setup — first-run admin creation (refuses once an admin exists).
+// ─────────────────────────────────────────────────────────────────────────────
+async fn setup_page(State(state): State<Arc<AppState>>) -> Result<Response, AppError> {
+    if !state.needs_setup.load(Ordering::Relaxed) {
+        return Ok(Redirect::to("/login").into_response());
+    }
+    Ok(Html(state.tera.render("setup.html", &tera::Context::new())?).into_response())
+}
+
+#[derive(Deserialize)]
+struct SetupForm {
+    username: String,
+    password: String,
+    confirm: String,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /setup — create the admin, then log in. No-op once an admin exists.
+// ─────────────────────────────────────────────────────────────────────────────
+async fn setup_submit(
+    State(state): State<Arc<AppState>>,
+    jar: SignedCookieJar,
+    Form(form): Form<SetupForm>,
+) -> Result<Response, AppError> {
+    if !state.needs_setup.load(Ordering::Relaxed) {
+        return Ok(Redirect::to("/login").into_response());
+    }
+    let render_err = |msg: &str| -> Result<Response, AppError> {
+        let mut ctx = tera::Context::new();
+        ctx.insert("error", msg);
+        Ok(Html(state.tera.render("setup.html", &ctx)?).into_response())
+    };
+    if form.password != form.confirm {
+        return render_err("Passwords do not match.");
+    }
+    let result = {
+        let conn = state.db.lock().expect("db mutex poisoned");
+        auth::create_admin(&conn, &form.username, &form.password)
+    };
+    match result {
+        Ok(()) => {
+            state.needs_setup.store(false, Ordering::Relaxed);
+            let jar = jar.add(session_cookie(form.username.trim().to_string()));
+            Ok((jar, Redirect::to("/")).into_response())
+        }
+        Err(e) => render_err(&e.to_string()),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /logout — clear the session cookie.
+// ─────────────────────────────────────────────────────────────────────────────
+async fn logout(jar: SignedCookieJar) -> (SignedCookieJar, Redirect) {
+    let removal = Cookie::build(("session", "")).path("/").build();
+    (jar.remove(removal), Redirect::to("/login"))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

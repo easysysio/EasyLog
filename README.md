@@ -31,6 +31,8 @@ parsed events in an embedded **DuckDB** column store, and serves a live
   URL, or status code to drill down** — filters stack and are shareable by URL.
 - 🎛️ **Web-managed sources** — map a sending host to a log type from the UI; no
   config edits or restarts required.
+- 🔒 **Authentication** — admin account created on first run; the web UI is
+  login-protected (bcrypt, signed-cookie sessions). Syslog ingestion stays open.
 - 🪶 **Single self-contained binary** — the web templates and static assets
   (Bootstrap + icons) are compiled into the binary, so there's nothing to install
   alongside it and it runs from any directory. Fully offline, no CDN.
@@ -90,7 +92,8 @@ The package installs:
 
 The service runs as root (standard for a syslog collector binding port 514), with
 a private `StateDirectory` for the database and `NoNewPrivileges` set. Then open
-`http://<host>:3000/`.
+`http://<host>:3000/` — on first run you'll be prompted to **create the admin
+account**, after which the UI requires login.
 
 ### From source
 

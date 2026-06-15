@@ -8,8 +8,11 @@
 // =============================================================================
 
 use std::collections::HashMap;
-use std::sync::{Mutex, RwLock};
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex, RwLock};
 
+use axum::extract::FromRef;
+use axum_extra::extract::cookie::Key;
 use duckdb::Connection;
 use tera::Tera;
 
@@ -26,6 +29,29 @@ pub struct AppState {
     pub db: Mutex<Connection>,
     pub sources: RwLock<HashMap<String, Source>>,
     pub tera: Tera,
+    /// Signing key for session cookies (persisted; see auth.rs).
+    pub cookie_key: Key,
+    /// True until the admin account is created (first-run setup).
+    pub needs_setup: AtomicBool,
+}
+
+// Router state: a local wrapper around the shared AppState. It exists so the
+// SignedCookieJar extractor can pull the cookie key via FromRef — the orphan
+// rule forbids implementing the foreign FromRef/Key pair against Arc<AppState>
+// directly, but a FromRef whose generic arg is our local WebState is allowed.
+#[derive(Clone)]
+pub struct WebState(pub Arc<AppState>);
+
+impl FromRef<WebState> for Arc<AppState> {
+    fn from_ref(s: &WebState) -> Self {
+        s.0.clone()
+    }
+}
+
+impl FromRef<WebState> for Key {
+    fn from_ref(s: &WebState) -> Self {
+        s.0.cookie_key.clone()
+    }
 }
 
 impl AppState {

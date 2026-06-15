@@ -9,6 +9,7 @@
 // self-contained binary with nothing to install alongside it.
 // =============================================================================
 
+mod auth;
 mod config;
 mod logtype;
 mod sources;
@@ -18,6 +19,7 @@ mod syslog;
 mod web;
 
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, RwLock};
 
 use anyhow::{Context, Result};
@@ -42,6 +44,8 @@ fn load_templates() -> Result<Tera> {
         ("index.html", include_str!("../templates/index.html")),
         ("sources.html", include_str!("../templates/sources.html")),
         ("apache.html", include_str!("../templates/apache.html")),
+        ("login.html", include_str!("../templates/login.html")),
+        ("setup.html", include_str!("../templates/setup.html")),
     ])
     .context("registering embedded templates")?;
     // Preserve HTML auto-escaping (Tera::new enables this for .html by default).
@@ -79,6 +83,11 @@ async fn main() -> Result<()> {
     sources::init_schema(&conn)?;
     let source_map: HashMap<String, sources::Source> = sources::load_map(&conn)?;
 
+    // Auth: schema, persisted cookie-signing key, and first-run setup flag.
+    auth::init_schema(&conn)?;
+    let cookie_key = auth::load_or_create_cookie_key(&conn)?;
+    let needs_setup = !auth::admin_exists(&conn)?;
+
     // Build the Tera engine from templates embedded in the binary.
     let tera = load_templates()?;
 
@@ -97,6 +106,8 @@ async fn main() -> Result<()> {
         db: Mutex::new(conn),
         sources: RwLock::new(source_map),
         tera,
+        cookie_key,
+        needs_setup: AtomicBool::new(needs_setup),
     });
 
     // Run syslog ingestion and the web server concurrently; if either fails,

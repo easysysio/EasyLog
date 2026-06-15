@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+{# login.html — standalone sign-in page (does not extend base; no navbar). #}
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — EasyLog</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/bootstrap.min.css">
+  <link rel="stylesheet" href="/static/bootstrap-icons.css">
+</head>
+<body class="d-flex align-items-center justify-content-center" style="min-height:100vh">
+  <div class="card shadow-sm" style="width:340px">
+    <div class="card-body p-4">
+      <h1 class="h4 text-center mb-4">
+        <i class="bi bi-stack text-primary"></i> Easy<span class="text-primary">Log</span>
+      </h1>
+      {% if error %}
+      <div class="alert alert-danger py-2 small d-flex align-items-center">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+      </div>
+      {% endif %}
+      <form method="post" action="/login">
+        <input name="username" class="form-control mb-2" placeholder="Username" required autofocus autocomplete="username">
+        <input name="password" type="password" class="form-control mb-3" placeholder="Password" required autocomplete="current-password">
+        <button class="btn btn-primary w-100" type="submit">Sign in</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

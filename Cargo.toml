@@ -7,6 +7,8 @@ license = "MIT"
 
 [dependencies]
 axum = "0.8"
+axum-extra = { version = "0.10", features = ["cookie", "cookie-signed"] }
+bcrypt = "0.16"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync"] }
 socket2 = "0.6"
 tracing = "0.1"
