@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Traefik log type** (JSON access logs) — the second pluggable log type. Parses
+  Traefik's `format: json` access log and serves a dedicated `/traefik` dashboard:
+  KPI cards (incl. average and p95 request duration), requests timeline, status
+  breakdown, and top paths / client IPs / **routers** / **services**, all with
+  click-to-filter drill-down and the time-range selector. `traefik` appears in the
+  `/sources` log-type dropdown automatically.
+
 ## [0.1.4] — 2026-06-13
 
 ### Added

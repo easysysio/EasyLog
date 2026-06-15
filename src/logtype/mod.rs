@@ -13,6 +13,7 @@ use duckdb::Connection;
 use std::collections::HashMap;
 
 pub mod apache;
+pub mod traefik;
 
 // Envelope metadata extracted from the syslog layer, passed to every parser.
 #[derive(Debug, Clone)]
@@ -56,6 +57,8 @@ impl Registry {
         let mut types: HashMap<&'static str, Box<dyn LogType>> = HashMap::new();
         let apache = apache::Apache;
         types.insert(apache.name(), Box::new(apache));
+        let traefik = traefik::Traefik;
+        types.insert(traefik.name(), Box::new(traefik));
         Registry { types }
     }
 

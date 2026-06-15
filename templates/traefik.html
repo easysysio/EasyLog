@@ -1,0 +1,193 @@
+{# traefik.html — Traefik dashboard: KPIs (incl. duration), timeline, status,
+   and top paths / client IPs / routers / services (drill-down links). #}
+{% extends "base.html" %}
+{% block title %}Traefik — EasyLog{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0"><i class="bi bi-diagram-3 me-2"></i>Traefik</h1>
+  <span class="badge text-bg-secondary">JSON access log</span>
+</div>
+
+{% if not has_data %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+      No Traefik logs yet. Add a Traefik <a href="/sources">source</a> and forward
+      its JSON access log over syslog — parsed requests will appear here.
+    </div>
+  </div>
+{% else %}
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-clock-history me-1"></i>Range</span>
+  <div class="btn-group btn-group-sm" role="group" aria-label="Time range">
+    {% for r in range_options %}
+    <a href="{{ r.href }}" class="btn btn-outline-primary {% if r.active %}active{% endif %}">{{ r.label }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+{% if has_filters %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-funnel me-1"></i>Filters</span>
+  {% for c in chips %}
+  <a href="{{ c.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
+    {{ c.label }} <i class="bi bi-x-lg ms-1"></i>
+  </a>
+  {% endfor %}
+  <a href="/traefik" class="small text-decoration-none ms-1">Clear all</a>
+</div>
+{% endif %}
+
+{% if kpis.requests == 0 %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-search fs-2 d-block mb-2"></i>
+      No requests in the selected time range or filter.
+    </div>
+  </div>
+{% else %}
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-2">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-activity me-1"></i>Requests</h6>
+      <div class="stat-value">{{ kpis.requests }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-people me-1"></i>Client IPs</h6>
+      <div class="stat-value">{{ kpis.unique_ips }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-download me-1"></i>Bytes</h6>
+      <div class="stat-value">{{ kpis.total_bytes }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-exclamation-octagon me-1"></i>Error rate</h6>
+      <div class="stat-value">{{ kpis.error_rate }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-clock me-1"></i>Avg time</h6>
+      <div class="stat-value">{{ kpis.avg_ms }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-speedometer2 me-1"></i>p95 time</h6>
+      <div class="stat-value">{{ kpis.p95_ms }}</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3">Requests over time <span class="text-secondary">({{ range_label }})</span></h6>
+    {% if timeline | length == 0 %}
+      <div class="text-secondary py-3">No requests in this time range.</div>
+    {% else %}
+    <div class="tl-chart">
+      <div class="tl-yaxis">
+        <span>{{ timeline_max }}</span>
+        {% if timeline_max > 1 %}<span>{{ timeline_mid }}</span>{% endif %}
+        <span>0</span>
+      </div>
+      <div class="tl-plot">
+        <div class="tl-bars">
+          {% for b in timeline %}
+          <div class="col" data-bs-toggle="tooltip" title="{{ b.label }} — {{ b.count }} requests">
+            <div class="bar bg-primary" style="height:{{ b.pct }}%"></div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="tl-xaxis">
+          {% for b in timeline %}<div class="xl">{{ b.label }}</div>{% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3">Status codes <span class="text-secondary">(click to filter)</span></h6>
+    {% for s in statuses %}
+    <a href="{{ s.href }}" class="d-flex align-items-center mb-2 text-decoration-none text-reset"
+       title="Filter to {{ s.label }}">
+      <div class="fw-semibold" style="width:54px">{{ s.label }}</div>
+      <div class="progress flex-grow-1" role="progressbar" style="height:18px">
+        <div class="progress-bar {{ s.css }}" style="width:{{ s.pct }}%"></div>
+      </div>
+      <div class="text-secondary text-end font-monospace" style="width:64px">{{ s.count }}</div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-link-45deg me-1"></i>Top URLs <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in top_urls %}
+      <tr>
+        <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
+  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-pc-display me-1"></i>Top client IPs <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in top_ips %}
+      <tr>
+        <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
+  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-signpost-2 me-1"></i>Top routers <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in top_routers %}
+      <tr>
+        <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
+  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-hdd-stack me-1"></i>Top services <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in top_services %}
+      <tr>
+        <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
+</div>
+
+<script>
+  document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    .forEach(el => new bootstrap.Tooltip(el));
+</script>
+
+{% endif %}{# requests == 0 #}
+{% endif %}{# not has_data #}
+{% endblock %}
