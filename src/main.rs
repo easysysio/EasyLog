@@ -46,6 +46,13 @@ fn load_templates() -> Result<Tera> {
     .context("registering embedded templates")?;
     // Preserve HTML auto-escaping (Tera::new enables this for .html by default).
     tera.autoescape_on(vec![".html"]);
+    // Expose the crate version to templates as {{ version() }}.
+    tera.register_function(
+        "version",
+        |_args: &std::collections::HashMap<String, tera::Value>| {
+            Ok(tera::Value::String(env!("CARGO_PKG_VERSION").to_string()))
+        },
+    );
     Ok(tera)
 }
 
