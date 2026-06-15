@@ -229,7 +229,7 @@ pub async fn dashboard(
 
     // Requests over time, bucketed to suit the selected range.
     let (bucket_expr, label_fmt) = bucketing(&range);
-    let timeline: Vec<Bar> = {
+    let (timeline, timeline_max): (Vec<Bar>, i64) = {
         let sql = format!(
             "SELECT strftime({bucket_expr}, '{label_fmt}'), count(*) FROM apache {where_clause} \
              GROUP BY {bucket_expr} ORDER BY {bucket_expr}"
@@ -240,7 +240,8 @@ pub async fn dashboard(
                 Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        to_bars(pairs)
+        let max = pairs.iter().map(|(_, c)| *c).max().unwrap_or(0);
+        (to_bars(pairs), max)
     };
 
     // Status-code class breakdown (2xx/3xx/4xx/5xx) — each clickable to filter.
@@ -315,6 +316,8 @@ pub async fn dashboard(
     ctx.insert("active", "apache");
     ctx.insert("kpis", &kpis);
     ctx.insert("timeline", &timeline);
+    ctx.insert("timeline_max", &timeline_max);
+    ctx.insert("timeline_mid", &(timeline_max / 2));
     ctx.insert("statuses", &statuses);
     ctx.insert("top_urls", &top_urls);
     ctx.insert("top_ips", &top_ips);

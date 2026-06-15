@@ -82,13 +82,24 @@
     {% if timeline | length == 0 %}
       <div class="text-secondary py-3">No requests in this time range.</div>
     {% else %}
-    <div class="timeline">
-      {% for b in timeline %}
-      <div class="col-bar" data-bs-toggle="tooltip" title="{{ b.label }} — {{ b.count }} requests">
-        <div class="bar bg-primary" style="height:{{ b.pct }}%"></div>
-        <div class="tl-label">{{ b.label }}</div>
+    <div class="tl-chart">
+      <div class="tl-yaxis">
+        <span>{{ timeline_max }}</span>
+        {% if timeline_max > 1 %}<span>{{ timeline_mid }}</span>{% endif %}
+        <span>0</span>
       </div>
-      {% endfor %}
+      <div class="tl-plot">
+        <div class="tl-bars">
+          {% for b in timeline %}
+          <div class="col" data-bs-toggle="tooltip" title="{{ b.label }} — {{ b.count }} requests">
+            <div class="bar bg-primary" style="height:{{ b.pct }}%"></div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="tl-xaxis">
+          {% for b in timeline %}<div class="xl">{{ b.label }}</div>{% endfor %}
+        </div>
+      </div>
     </div>
     {% endif %}
   </div>

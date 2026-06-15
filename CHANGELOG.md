@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Y-axis on the "Requests over time" chart** — scale labels (max / midpoint / 0)
+  with gridlines, so bar magnitudes are readable, not just relative.
 - **Authentication.** The web UI is now gated behind a single admin account. On
   first run a `/setup` page creates the admin (bcrypt-hashed); afterwards `/login`
   is required, with a Logout button in the navbar. Sessions are stateless signed
