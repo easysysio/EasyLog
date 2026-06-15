@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-06-13
+
 ### Added
 - **Traefik log type** (JSON access logs) — the second pluggable log type. Parses
   Traefik's `format: json` access log and serves a dedicated `/traefik` dashboard:
