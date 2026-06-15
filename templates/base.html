@@ -88,5 +88,31 @@
     EasyLog v{{ version() }}
   </div>
   <script src="/static/bootstrap.bundle.min.js"></script>
+  <script>
+  (function () {
+    // Render timeline labels/tooltips in the browser's local timezone. The
+    // server sends each bucket's UTC epoch (data-ts) and a granularity hint.
+    var chart = document.querySelector('.tl-chart');
+    if (chart) {
+      var gran = chart.dataset.tlGran || 'time';
+      var fmt = function (epoch) {
+        var d = new Date(epoch * 1000);
+        if (gran === 'month') return d.toLocaleDateString([], { year: 'numeric', month: '2-digit' });
+        if (gran === 'day')   return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      };
+      chart.querySelectorAll('.tl-xaxis .xl[data-ts]').forEach(function (el) {
+        el.textContent = fmt(parseInt(el.dataset.ts, 10));
+      });
+      chart.querySelectorAll('.tl-bars .col[data-ts]').forEach(function (el) {
+        el.setAttribute('title', fmt(parseInt(el.dataset.ts, 10)) + ' — ' + (el.dataset.count || '0') + ' requests');
+      });
+    }
+    // Initialize Bootstrap tooltips (timeline bars).
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
+      new bootstrap.Tooltip(el);
+    });
+  })();
+  </script>
 </body>
 </html>

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Dashboard timeline shows times in the browser's local timezone** instead of
+  UTC. The server sends each bucket's UTC epoch + a granularity hint, and the
+  page formats x-axis labels and tooltips client-side via the browser's locale.
+
 ## [0.2.0] — 2026-06-13
 
 ### Added

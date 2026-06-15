@@ -165,6 +165,8 @@ struct Bar {
     pct: i64,
     css: String,
     href: String,
+    /// Bucket start as a UTC epoch (seconds); 0 for non-timeline bars.
+    ts_epoch: i64,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -224,21 +226,22 @@ pub async fn dashboard(
         p95_ms: fmt_ms(p95_ms),
     };
 
-    // Requests over time.
-    let (bucket_expr, label_fmt) = bucketing(&range);
+    // Requests over time (each bucket carries its UTC epoch for client localizing).
+    let (bucket_expr, label_fmt, tl_gran) = bucketing(&range);
     let (timeline, timeline_max): (Vec<Bar>, i64) = {
         let sql = format!(
-            "SELECT strftime({bucket_expr}, '{label_fmt}'), count(*) FROM traefik {where_clause} \
+            "SELECT strftime({bucket_expr}, '{label_fmt}'), \
+             CAST(epoch({bucket_expr}) AS BIGINT), count(*) FROM traefik {where_clause} \
              GROUP BY {bucket_expr} ORDER BY {bucket_expr}"
         );
         let mut stmt = conn.prepare(&sql)?;
-        let pairs = stmt
+        let rows = stmt
             .query_map(params_from_iter(vals.iter()), |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?))
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        let max = pairs.iter().map(|(_, c)| *c).max().unwrap_or(0);
-        (to_bars(pairs), max)
+        let max = rows.iter().map(|(_, _, c)| *c).max().unwrap_or(0);
+        (to_bars(rows), max)
     };
 
     // Status-code class breakdown.
@@ -265,6 +268,7 @@ pub async fn dashboard(
                 pct: pct(count, max),
                 css: status_class(klass),
                 href: filter.with_status(klass).href(),
+                ts_epoch: 0,
             })
             .collect()
     };
@@ -316,6 +320,7 @@ pub async fn dashboard(
     ctx.insert("timeline", &timeline);
     ctx.insert("timeline_max", &timeline_max);
     ctx.insert("timeline_mid", &(timeline_max / 2));
+    ctx.insert("tl_gran", tl_gran);
     ctx.insert("statuses", &statuses);
     ctx.insert("top_urls", &top_urls);
     ctx.insert("top_ips", &top_ips);
@@ -355,6 +360,7 @@ fn top_n(
             href: href_for(&label),
             css: String::new(),
             label,
+            ts_epoch: 0,
         })
         .collect())
 }
@@ -367,16 +373,16 @@ fn build_where(conds: &[String]) -> String {
     }
 }
 
-fn to_bars(pairs: Vec<(String, i64)>) -> Vec<Bar> {
-    let max = pairs.iter().map(|(_, c)| *c).max().unwrap_or(0);
-    pairs
-        .into_iter()
-        .map(|(label, count)| Bar {
+fn to_bars(rows: Vec<(String, i64, i64)>) -> Vec<Bar> {
+    let max = rows.iter().map(|(_, _, c)| *c).max().unwrap_or(0);
+    rows.into_iter()
+        .map(|(label, ts_epoch, count)| Bar {
             pct: pct(count, max),
             count,
             css: String::new(),
             href: String::new(),
             label,
+            ts_epoch,
         })
         .collect()
 }
@@ -399,13 +405,13 @@ fn status_class(klass: i32) -> String {
     .to_string()
 }
 
-fn bucketing(range: &str) -> (&'static str, &'static str) {
+fn bucketing(range: &str) -> (&'static str, &'static str, &'static str) {
     match range {
-        "1h" => ("time_bucket(INTERVAL '5 minutes', ts)", "%H:%M"),
-        "7d" => ("date_trunc('day', ts)", "%m-%d"),
-        "30d" => ("date_trunc('day', ts)", "%m-%d"),
-        "1y" => ("date_trunc('month', ts)", "%Y-%m"),
-        _ => ("date_trunc('hour', ts)", "%H:%M"),
+        "1h" => ("time_bucket(INTERVAL '5 minutes', ts)", "%H:%M", "time"),
+        "7d" => ("date_trunc('day', ts)", "%m-%d", "day"),
+        "30d" => ("date_trunc('day', ts)", "%m-%d", "day"),
+        "1y" => ("date_trunc('month', ts)", "%Y-%m", "month"),
+        _ => ("date_trunc('hour', ts)", "%H:%M", "time"),
     }
 }
 

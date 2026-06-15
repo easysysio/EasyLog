@@ -93,7 +93,7 @@
     {% if timeline | length == 0 %}
       <div class="text-secondary py-3">No requests in this time range.</div>
     {% else %}
-    <div class="tl-chart">
+    <div class="tl-chart" data-tl-gran="{{ tl_gran }}">
       <div class="tl-yaxis">
         <span>{{ timeline_max }}</span>
         {% if timeline_max > 1 %}<span>{{ timeline_mid }}</span>{% endif %}
@@ -102,13 +102,14 @@
       <div class="tl-plot">
         <div class="tl-bars">
           {% for b in timeline %}
-          <div class="col" data-bs-toggle="tooltip" title="{{ b.label }} — {{ b.count }} requests">
+          <div class="col" data-bs-toggle="tooltip" data-ts="{{ b.ts_epoch }}" data-count="{{ b.count }}"
+               title="{{ b.label }} — {{ b.count }} requests">
             <div class="bar bg-primary" style="height:{{ b.pct }}%"></div>
           </div>
           {% endfor %}
         </div>
         <div class="tl-xaxis">
-          {% for b in timeline %}<div class="xl">{{ b.label }}</div>{% endfor %}
+          {% for b in timeline %}<div class="xl" data-ts="{{ b.ts_epoch }}">{{ b.label }}</div>{% endfor %}
         </div>
       </div>
     </div>
@@ -182,11 +183,6 @@
     </tbody></table>
   </div></div></div>
 </div>
-
-<script>
-  document.querySelectorAll('[data-bs-toggle="tooltip"]')
-    .forEach(el => new bootstrap.Tooltip(el));
-</script>
 
 {% endif %}{# requests == 0 #}
 {% endif %}{# not has_data #}
