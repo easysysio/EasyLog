@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-06-13
+
 ### Added
 - **Y-axis on the "Requests over time" chart** — scale labels (max / midpoint / 0)
   with gridlines, so bar magnitudes are readable, not just relative.

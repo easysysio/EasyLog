@@ -1,6 +1,6 @@
 [package]
 name = "easylog"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 description = "EasyLog — a log analyzer web service"
 license = "MIT"
