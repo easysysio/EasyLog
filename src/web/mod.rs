@@ -11,6 +11,8 @@ use std::sync::Arc;
 
 use std::sync::atomic::Ordering;
 
+use chrono::{Datelike, Duration, NaiveDate, Timelike, Utc};
+
 use axum::{
     Form, Json, Router,
     extract::{Path, Request, State},
@@ -109,6 +111,64 @@ async fn static_asset(Path(path): Path<String>) -> Response {
 // ─────────────────────────────────────────────────────────────────────────────
 async fn favicon() -> Response {
     ([(header::CONTENT_TYPE, "image/svg+xml")], FAVICON).into_response()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// timeline_series(range)
+// Returns the full, zero-fillable list of timeline buckets for a range as
+// (UTC epoch, fallback label), aligned to the same boundaries DuckDB's bucketing
+// produces. Dashboards left-join their per-bucket counts onto this so the chart
+// always spans the whole window even where there's no data:
+//   1h → 12×5min, 24h → 24×hour, 7d → 7×day, 30d → 30×day, 1y → 12×month.
+// ─────────────────────────────────────────────────────────────────────────────
+pub(crate) fn timeline_series(range: &str) -> Vec<(i64, String)> {
+    let now = Utc::now().naive_utc();
+    let mut out: Vec<(i64, String)> = Vec::new();
+    match range {
+        "1h" => {
+            let m = now.minute() - now.minute() % 5;
+            let end = now.with_minute(m).unwrap().with_second(0).unwrap().with_nanosecond(0).unwrap();
+            for i in (0..12).rev() {
+                let t = end - Duration::minutes(5 * i);
+                out.push((t.and_utc().timestamp(), t.format("%H:%M").to_string()));
+            }
+        }
+        "7d" | "30d" => {
+            let days: i64 = if range == "7d" { 7 } else { 30 };
+            let end = now.date().and_hms_opt(0, 0, 0).unwrap();
+            for i in (0..days).rev() {
+                let t = end - Duration::days(i);
+                out.push((t.and_utc().timestamp(), t.format("%m-%d").to_string()));
+            }
+        }
+        "1y" => {
+            let (mut y, mut m) = (now.year(), now.month());
+            let mut months = Vec::new();
+            for _ in 0..12 {
+                months.push((y, m));
+                if m == 1 {
+                    y -= 1;
+                    m = 12;
+                } else {
+                    m -= 1;
+                }
+            }
+            months.reverse();
+            for (yy, mm) in months {
+                let t = NaiveDate::from_ymd_opt(yy, mm, 1).unwrap().and_hms_opt(0, 0, 0).unwrap();
+                out.push((t.and_utc().timestamp(), t.format("%Y-%m").to_string()));
+            }
+        }
+        _ => {
+            // 24h: 24 hourly buckets ending at the current hour.
+            let end = now.with_minute(0).unwrap().with_second(0).unwrap().with_nanosecond(0).unwrap();
+            for i in (0..24).rev() {
+                let t = end - Duration::hours(i);
+                out.push((t.and_utc().timestamp(), t.format("%H:%M").to_string()));
+            }
+        }
+    }
+    out
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -226,23 +226,39 @@ pub async fn dashboard(
         p95_ms: fmt_ms(p95_ms),
     };
 
-    // Requests over time (each bucket carries its UTC epoch for client localizing).
-    let (bucket_expr, label_fmt, tl_gran) = bucketing(&range);
-    let (timeline, timeline_max): (Vec<Bar>, i64) = {
+    // Requests over time, zero-filled onto the full series for the range.
+    let (bucket_expr, tl_gran) = bucketing(&range);
+    let counts: std::collections::HashMap<i64, i64> = {
         let sql = format!(
-            "SELECT strftime({bucket_expr}, '{label_fmt}'), \
-             CAST(epoch({bucket_expr}) AS BIGINT), count(*) FROM traefik {where_clause} \
-             GROUP BY {bucket_expr} ORDER BY {bucket_expr}"
+            "SELECT CAST(epoch({bucket_expr}) AS BIGINT), count(*) FROM traefik {where_clause} \
+             GROUP BY {bucket_expr}"
         );
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt
-            .query_map(params_from_iter(vals.iter()), |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?))
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-        let max = rows.iter().map(|(_, _, c)| *c).max().unwrap_or(0);
-        (to_bars(rows), max)
+        stmt.query_map(params_from_iter(vals.iter()), |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?))
+        })?
+        .collect::<Result<std::collections::HashMap<i64, i64>, _>>()?
     };
+    let series = super::timeline_series(&range);
+    let timeline_max = series
+        .iter()
+        .map(|(e, _)| counts.get(e).copied().unwrap_or(0))
+        .max()
+        .unwrap_or(0);
+    let timeline: Vec<Bar> = series
+        .into_iter()
+        .map(|(epoch, label)| {
+            let count = counts.get(&epoch).copied().unwrap_or(0);
+            Bar {
+                pct: pct(count, timeline_max),
+                count,
+                css: String::new(),
+                href: String::new(),
+                label,
+                ts_epoch: epoch,
+            }
+        })
+        .collect();
 
     // Status-code class breakdown.
     let statuses: Vec<Bar> = {
@@ -373,20 +389,6 @@ fn build_where(conds: &[String]) -> String {
     }
 }
 
-fn to_bars(rows: Vec<(String, i64, i64)>) -> Vec<Bar> {
-    let max = rows.iter().map(|(_, _, c)| *c).max().unwrap_or(0);
-    rows.into_iter()
-        .map(|(label, ts_epoch, count)| Bar {
-            pct: pct(count, max),
-            count,
-            css: String::new(),
-            href: String::new(),
-            label,
-            ts_epoch,
-        })
-        .collect()
-}
-
 fn pct(count: i64, max: i64) -> i64 {
     if max <= 0 {
         0
@@ -405,13 +407,13 @@ fn status_class(klass: i32) -> String {
     .to_string()
 }
 
-fn bucketing(range: &str) -> (&'static str, &'static str, &'static str) {
+fn bucketing(range: &str) -> (&'static str, &'static str) {
     match range {
-        "1h" => ("time_bucket(INTERVAL '5 minutes', ts)", "%H:%M", "time"),
-        "7d" => ("date_trunc('day', ts)", "%m-%d", "day"),
-        "30d" => ("date_trunc('day', ts)", "%m-%d", "day"),
-        "1y" => ("date_trunc('month', ts)", "%Y-%m", "month"),
-        _ => ("date_trunc('hour', ts)", "%H:%M", "time"),
+        "1h" => ("time_bucket(INTERVAL '5 minutes', ts)", "time"),
+        "7d" => ("date_trunc('day', ts)", "day"),
+        "30d" => ("date_trunc('day', ts)", "day"),
+        "1y" => ("date_trunc('month', ts)", "month"),
+        _ => ("date_trunc('hour', ts)", "time"),
     }
 }
 

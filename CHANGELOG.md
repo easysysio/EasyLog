@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Timeline now spans the full selected range**, zero-filling empty buckets. The
+  chart previously only drew buckets that had data, so e.g. the weekly view
+  collapsed to a single bar when only the current day had logs. It now always
+  shows all buckets for the range (24 hours, 7 days, 30 days, 12 months, …) with
+  empty ones as gaps.
+
 ## [0.2.1] — 2026-06-15
 
 ### Changed
