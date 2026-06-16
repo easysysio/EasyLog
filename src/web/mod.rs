@@ -302,12 +302,110 @@ async fn logout(jar: SignedCookieJar) -> (SignedCookieJar, Redirect) {
 // Home page — short intro plus source/log-type counts.
 // ─────────────────────────────────────────────────────────────────────────────
 async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppError> {
-    let count = state.sources.read().expect("sources lock poisoned").len();
+    let cutoff = (Utc::now() - Duration::hours(24))
+        .naive_utc()
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+
+    let mut total: i64 = 0;
+    let mut last24: i64 = 0;
+    let mut by_type: Vec<(String, i64)> = Vec::new();
+    let mut by_ip: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+
+    {
+        let conn = state.db.lock().expect("db mutex poisoned");
+        // Each registered log type's table is named after the type.
+        for name in state.registry.names() {
+            let t: i64 = {
+                let mut s = conn.prepare(&format!("SELECT count(*) FROM {name}"))?;
+                let mut r = s.query_map([], |row| row.get(0))?;
+                r.next().transpose()?.unwrap_or(0)
+            };
+            let l: i64 = {
+                let mut s = conn
+                    .prepare(&format!("SELECT count(*) FROM {name} WHERE ts >= CAST(? AS TIMESTAMP)"))?;
+                let mut r = s.query_map(duckdb::params![cutoff], |row| row.get(0))?;
+                r.next().transpose()?.unwrap_or(0)
+            };
+            total += t;
+            last24 += l;
+            by_type.push((name.to_string(), t));
+
+            let mut s = conn.prepare(&format!("SELECT source_ip, count(*) FROM {name} GROUP BY source_ip"))?;
+            let rows = s.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
+            for row in rows {
+                let (ip, c) = row?;
+                *by_ip.entry(ip).or_insert(0) += c;
+            }
+        }
+    }
+
+    // Map each source IP to its friendly name for the "by source" pie.
+    let by_source: Vec<(String, i64)> = {
+        let sources = state.sources.read().expect("sources lock poisoned");
+        by_ip
+            .into_iter()
+            .map(|(ip, c)| (sources.get(&ip).map(|s| s.name.clone()).unwrap_or(ip), c))
+            .collect()
+    };
+    let (source_gradient, source_slices) = build_pie(by_source);
+    let (type_gradient, type_slices) = build_pie(by_type);
+
     let mut ctx = tera::Context::new();
     ctx.insert("active", "home");
-    ctx.insert("source_count", &count);
+    ctx.insert("source_count", &state.sources.read().expect("sources lock poisoned").len());
     ctx.insert("log_types", &state.registry.names());
+    ctx.insert("total_logs", &total);
+    ctx.insert("last24", &last24);
+    ctx.insert("avg_per_min", &format!("{:.2}", last24 as f64 / 1440.0));
+    ctx.insert("source_gradient", &source_gradient);
+    ctx.insert("source_slices", &source_slices);
+    ctx.insert("type_gradient", &type_gradient);
+    ctx.insert("type_slices", &type_slices);
+    ctx.insert("has_data", &(total > 0));
     Ok(Html(state.tera.render("index.html", &ctx)?))
+}
+
+// One pie slice: label, count, percent (formatted), and colour.
+#[derive(Serialize)]
+struct Slice {
+    label: String,
+    count: i64,
+    pct: String,
+    color: String,
+}
+
+// Builds a CSS conic-gradient string + legend slices from "(label, count)" items.
+// Caps at the top 7 by count, rolling the rest into an "Other" slice.
+fn build_pie(mut items: Vec<(String, i64)>) -> (String, Vec<Slice>) {
+    items.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    let palette = [
+        "#4f9cf9", "#3fb950", "#d8a02a", "#a371f7", "#2dd4bf", "#f78166", "#e2555a", "#8b949e",
+    ];
+    let other: i64 = if items.len() > 8 {
+        items.split_off(7).iter().map(|(_, c)| c).sum()
+    } else {
+        0
+    };
+    let total: i64 = items.iter().map(|(_, c)| c).sum::<i64>() + other;
+
+    let mut slices = Vec::new();
+    let mut parts = Vec::new();
+    let mut cum = 0.0f64;
+    for (i, (label, count)) in items.into_iter().enumerate() {
+        let pct = if total > 0 { count as f64 * 100.0 / total as f64 } else { 0.0 };
+        let color = palette[i % palette.len()].to_string();
+        let end = cum + pct;
+        parts.push(format!("{color} {cum:.3}% {end:.3}%"));
+        cum = end;
+        slices.push(Slice { label, count, pct: format!("{pct:.1}"), color });
+    }
+    if other > 0 {
+        let pct = other as f64 * 100.0 / total as f64;
+        parts.push(format!("#6e7681 {cum:.3}% 100%"));
+        slices.push(Slice { label: "Other".into(), count: other, pct: format!("{pct:.1}"), color: "#6e7681".into() });
+    }
+    (parts.join(", "), slices)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

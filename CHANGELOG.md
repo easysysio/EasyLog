@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Home overview stats.** The home page now shows cross-log-type KPIs (total
+  logs, last-24h count, average logs/min, configured sources) and two CSS pie
+  charts — **logs by source** and **logs by type** — with legends. Aggregated
+  across every log type's table; no charting library (pure conic-gradient).
+
 ### Fixed
 - **Timeline now spans the full selected range**, zero-filling empty buckets. The
   chart previously only drew buckets that had data, so e.g. the weekly view

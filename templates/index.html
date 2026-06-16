@@ -1,36 +1,77 @@
-{# index.html — EasyLog home page (Bootstrap). #}
+{# index.html — EasyLog overview: cross-log-type KPIs + pie charts. #}
 {% extends "base.html" %}
 {% block title %}EasyLog{% endblock %}
 {% block content %}
-<div class="p-4 p-md-5 mb-4 rounded-3 border bg-body-tertiary">
-  <h1 class="display-6 fw-bold">Easy<span class="brand-mark">Log</span></h1>
-  <p class="col-md-9 fs-5 text-secondary mb-0">
-    A multi-log analyzer. EasyLog ingests logs over syslog (UDP&nbsp;+&nbsp;TCP),
-    parses each by type, and stores them in DuckDB — with a dedicated dashboard
-    per log type.
-  </p>
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0">Overview</h1>
+  <span class="text-secondary small">
+    {% for t in log_types %}<span class="badge text-bg-secondary ms-1">{{ t }}</span>{% endfor %}
+  </span>
 </div>
 
-<div class="row g-3">
-  <div class="col-sm-6">
-    <div class="card h-100">
-      <div class="card-body">
-        <h6 class="section-title mb-2"><i class="bi bi-hdd-network me-1"></i>Configured sources</h6>
-        <div class="stat-value">{{ source_count }}</div>
-        <a href="/sources" class="stretched-link small text-decoration-none">Manage sources →</a>
-      </div>
+{% if not has_data %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+      No logs yet. Add a <a href="/sources">source</a> and forward logs over syslog —
+      stats will appear here as data arrives.
     </div>
   </div>
-  <div class="col-sm-6">
-    <div class="card h-100">
-      <div class="card-body">
-        <h6 class="section-title mb-2"><i class="bi bi-bar-chart me-1"></i>Log types</h6>
-        <div class="mb-2">
-          {% for t in log_types %}<span class="badge text-bg-primary me-1">{{ t }}</span>{% endfor %}
-        </div>
-        <a href="/apache" class="stretched-link small text-decoration-none">Open Apache dashboard →</a>
-      </div>
-    </div>
-  </div>
+{% else %}
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-collection me-1"></i>Total logs</h6>
+    <div class="stat-value">{{ total_logs }}</div>
+  </div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-clock-history me-1"></i>Last 24h</h6>
+    <div class="stat-value">{{ last24 }}</div>
+  </div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-speedometer me-1"></i>Logs/min <span class="text-secondary">(24h avg)</span></h6>
+    <div class="stat-value">{{ avg_per_min }}</div>
+  </div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-hdd-network me-1"></i>Sources</h6>
+    <div class="stat-value">{{ source_count }}</div>
+  </div></div></div>
 </div>
+
+<div class="row g-4">
+  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-pie-chart me-1"></i>Logs by source</h6>
+    <div class="d-flex align-items-center gap-4">
+      <div class="pie" style="background: conic-gradient({{ source_gradient }})"></div>
+      <div class="flex-grow-1" style="min-width:0">
+        {% for s in source_slices %}
+        <div class="d-flex align-items-center small mb-1">
+          <span class="pie-dot me-2" style="background:{{ s.color }}"></span>
+          <span class="text-truncate flex-grow-1">{{ s.label }}</span>
+          <span class="text-secondary font-monospace ms-2">{{ s.count }}</span>
+          <span class="text-secondary ms-2" style="width:48px;text-align:right">{{ s.pct }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div></div></div>
+
+  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-pie-chart me-1"></i>Logs by type</h6>
+    <div class="d-flex align-items-center gap-4">
+      <div class="pie" style="background: conic-gradient({{ type_gradient }})"></div>
+      <div class="flex-grow-1" style="min-width:0">
+        {% for s in type_slices %}
+        <div class="d-flex align-items-center small mb-1">
+          <span class="pie-dot me-2" style="background:{{ s.color }}"></span>
+          <span class="text-truncate flex-grow-1">{{ s.label }}</span>
+          <span class="text-secondary font-monospace ms-2">{{ s.count }}</span>
+          <span class="text-secondary ms-2" style="width:48px;text-align:right">{{ s.pct }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div></div></div>
+</div>
+{% endif %}
 {% endblock %}
