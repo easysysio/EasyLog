@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-06-16
+
 ### Added
 - **Home overview stats.** The home page now shows cross-log-type KPIs (total
   logs, last-24h count, average logs/min, configured sources) and two CSS pie
