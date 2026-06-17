@@ -5,10 +5,10 @@ set -e
 
 if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || true
-    # On upgrades, restart if the unit is already enabled; a no-op on first install.
-    if systemctl is-enabled easylog.service >/dev/null 2>&1; then
-        systemctl try-restart easylog.service >/dev/null 2>&1 || true
-    fi
+    # Restart if the service is currently running (no-op otherwise), so an upgrade
+    # always picks up the new binary/unit without a manual restart — regardless of
+    # whether the unit is "enabled".
+    systemctl try-restart easylog.service >/dev/null 2>&1 || true
 fi
 
 exit 0

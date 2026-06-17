@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **deb upgrades now always restart the service.** The post-install hook only
+  restarted when the unit reported as `enabled`, which could be skipped on some
+  setups (leaving the old binary running until a manual restart). It now
+  unconditionally `try-restart`s on upgrade, matching the rpm behaviour.
+
 ## [0.2.2] — 2026-06-16
 
 ### Added
