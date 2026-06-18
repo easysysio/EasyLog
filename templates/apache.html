@@ -2,10 +2,10 @@
    Top URLs, client IPs, and status codes are drill-down links that filter the
    whole dashboard; active filters show as removable chips. #}
 {% extends "base.html" %}
-{% block title %}Apache — EasyLog{% endblock %}
+{% block title %}{{ type_label }} — EasyLog{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
-  <h1 class="h3 mb-0"><i class="bi bi-bar-chart me-2"></i>Apache</h1>
+  <h1 class="h3 mb-0"><i class="bi bi-bar-chart me-2"></i>{{ type_label }}</h1>
   <span class="badge text-bg-secondary">Combined Log Format</span>
 </div>
 
@@ -13,7 +13,7 @@
   <div class="card">
     <div class="card-body text-secondary text-center py-5">
       <i class="bi bi-inbox fs-2 d-block mb-2"></i>
-      No Apache logs yet. Add an Apache <a href="/sources">source</a> and forward
+      No {{ type_label }} logs yet. Add a {{ type_label }} <a href="/sources">source</a> and forward
       access logs over syslog — parsed requests will appear here.
     </div>
   </div>
@@ -36,7 +36,7 @@
     {{ c.label }} <i class="bi bi-x-lg ms-1"></i>
   </a>
   {% endfor %}
-  <a href="/apache" class="small text-decoration-none ms-1">Clear all</a>
+  <a href="{{ base }}" class="small text-decoration-none ms-1">Clear all</a>
 </div>
 {% endif %}
 

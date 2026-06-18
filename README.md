@@ -39,8 +39,9 @@ parsed events in an embedded **DuckDB** column store, and serves a live
 - 📦 **First-class packaging** — `.deb` and `.rpm` for **x86_64 and arm64**, with
   a systemd unit, built and published automatically on each tag.
 
-Supported log types: **Apache** (Common/Combined Log Format) and **Traefik**
-(JSON access logs), each with its own dashboard.
+Supported log types: **Apache** (Common/Combined Log Format), **nginx**
+(combined access logs), and **Traefik** (JSON access logs), each with its own
+dashboard.
 
 ## How it works
 

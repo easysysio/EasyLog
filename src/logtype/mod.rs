@@ -13,6 +13,7 @@ use duckdb::Connection;
 use std::collections::HashMap;
 
 pub mod apache;
+pub mod nginx;
 pub mod traefik;
 
 // Envelope metadata extracted from the syslog layer, passed to every parser.
@@ -59,6 +60,8 @@ impl Registry {
         types.insert(apache.name(), Box::new(apache));
         let traefik = traefik::Traefik;
         types.insert(traefik.name(), Box::new(traefik));
+        let nginx = nginx::Nginx;
+        types.insert(nginx.name(), Box::new(nginx));
         Registry { types }
     }
 

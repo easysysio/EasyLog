@@ -54,11 +54,11 @@ impl Filter {
         }
     }
 
-    // Serialize back to a `/apache?...` URL (values percent-encoded by serde).
-    fn href(&self) -> String {
+    // Serialize back to a `<base>?...` URL (values percent-encoded by serde).
+    fn href(&self, base: &str) -> String {
         match serde_urlencoded::to_string(self) {
-            Ok(q) if !q.is_empty() => format!("/apache?{q}"),
-            _ => "/apache".to_string(),
+            Ok(q) if !q.is_empty() => format!("{base}?{q}"),
+            _ => base.to_string(),
         }
     }
 
@@ -183,24 +183,38 @@ struct Bar {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /apache  (optional ?range= time window and ?ip= &path= &status= filters)
-// Builds the Apache dashboard context from live, range- and filter-bounded
-// DuckDB aggregations and renders templates/apache.html.
 // ─────────────────────────────────────────────────────────────────────────────
 pub async fn dashboard(
     State(state): State<Arc<AppState>>,
     Query(filter): Query<Filter>,
 ) -> Result<Html<String>, AppError> {
-    let filter = filter.normalized();
+    render(&state, filter, "apache", "/apache", "Apache", "apache.html")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// render(state, raw, table, base, type_label, template)
+// Builds a combined-log-format dashboard (shared by Apache and nginx — identical
+// schema) from live, range- and filter-bounded DuckDB aggregations over `table`,
+// with drill-down links rooted at `base`, and renders `template`.
+// ─────────────────────────────────────────────────────────────────────────────
+pub(crate) fn render(
+    state: &Arc<AppState>,
+    raw: Filter,
+    table: &str,
+    base: &str,
+    type_label: &str,
+    template: &str,
+) -> Result<Html<String>, AppError> {
+    let filter = raw.normalized();
     let range = filter.range_key().to_string();
     let (conds, vals) = filter.sql();
     let where_clause = build_where(&conds);
 
     let conn = state.db.lock().expect("db mutex poisoned");
 
-    // Whether any rows exist at all (ignoring range/filter) — decides the "no
-    // logs yet" empty state vs. a window/filter that simply matched nothing.
+    // Any rows at all (ignoring range/filter) — decides the "no logs yet" state.
     let total_rows: i64 = {
-        let mut stmt = conn.prepare("SELECT count(*) FROM apache")?;
+        let mut stmt = conn.prepare(&format!("SELECT count(*) FROM {table}"))?;
         let mut rows = stmt.query_map([], |r| r.get(0))?;
         rows.next().transpose()?.unwrap_or(0)
     };
@@ -210,7 +224,7 @@ pub async fn dashboard(
         let sql = format!(
             "SELECT count(*), count(DISTINCT remote_host), \
              CAST(coalesce(sum(bytes), 0) AS BIGINT), \
-             count(*) FILTER (WHERE status >= 400) FROM apache {where_clause}"
+             count(*) FILTER (WHERE status >= 400) FROM {table} {where_clause}"
         );
         let mut stmt = conn.prepare(&sql)?;
         let mut rows = stmt.query_map(params_from_iter(vals.iter()), |r| {
@@ -231,12 +245,11 @@ pub async fn dashboard(
         error_rate,
     };
 
-    // Requests over time. Counts are grouped by bucket in SQL, then left-joined
-    // onto the full zero-filled series so the chart spans the whole window.
+    // Requests over time, zero-filled onto the full series for the range.
     let (bucket_expr, tl_gran) = bucketing(&range);
     let counts: std::collections::HashMap<i64, i64> = {
         let sql = format!(
-            "SELECT CAST(epoch({bucket_expr}) AS BIGINT), count(*) FROM apache {where_clause} \
+            "SELECT CAST(epoch({bucket_expr}) AS BIGINT), count(*) FROM {table} {where_clause} \
              GROUP BY {bucket_expr}"
         );
         let mut stmt = conn.prepare(&sql)?;
@@ -246,40 +259,26 @@ pub async fn dashboard(
         .collect::<Result<std::collections::HashMap<i64, i64>, _>>()?
     };
     let series = super::timeline_series(&range);
-    let timeline_max = series
-        .iter()
-        .map(|(e, _)| counts.get(e).copied().unwrap_or(0))
-        .max()
-        .unwrap_or(0);
+    let timeline_max = series.iter().map(|(e, _)| counts.get(e).copied().unwrap_or(0)).max().unwrap_or(0);
     let timeline: Vec<Bar> = series
         .into_iter()
         .map(|(epoch, label)| {
             let count = counts.get(&epoch).copied().unwrap_or(0);
-            Bar {
-                pct: pct(count, timeline_max),
-                count,
-                css: String::new(),
-                href: String::new(),
-                label,
-                ts_epoch: epoch,
-            }
+            Bar { pct: pct(count, timeline_max), count, css: String::new(), href: String::new(), label, ts_epoch: epoch }
         })
         .collect();
 
-    // Status-code class breakdown (2xx/3xx/4xx/5xx) — each clickable to filter.
+    // Status-code class breakdown — each clickable to filter.
     let statuses: Vec<Bar> = {
         let mut sconds = conds.clone();
         sconds.push("status IS NOT NULL".to_string());
         let sql = format!(
-            "SELECT CAST(status / 100 AS INTEGER) k, count(*) FROM apache {} \
-             GROUP BY k ORDER BY k",
+            "SELECT CAST(status / 100 AS INTEGER) k, count(*) FROM {table} {} GROUP BY k ORDER BY k",
             build_where(&sconds)
         );
         let mut stmt = conn.prepare(&sql)?;
         let pairs = stmt
-            .query_map(params_from_iter(vals.iter()), |r| {
-                Ok((r.get::<_, i32>(0)?, r.get::<_, i64>(1)?))
-            })?
+            .query_map(params_from_iter(vals.iter()), |r| Ok((r.get::<_, i32>(0)?, r.get::<_, i64>(1)?)))?
             .collect::<Result<Vec<_>, _>>()?;
         let max = pairs.iter().map(|(_, c)| *c).max().unwrap_or(0);
         pairs
@@ -289,33 +288,23 @@ pub async fn dashboard(
                 count,
                 pct: pct(count, max),
                 css: status_class(klass),
-                href: filter.with_status(klass).href(),
+                href: filter.with_status(klass).href(base),
                 ts_epoch: 0,
             })
             .collect()
     };
 
     // Top 10 paths and client IPs — each clickable to add a filter.
-    let top_urls = top_n(&conn, "path", &where_clause, &vals, |label| {
-        filter.with_path(label).href()
-    })?;
-    let top_ips = top_n(&conn, "remote_host", &where_clause, &vals, |label| {
-        filter.with_ip(label).href()
-    })?;
+    let top_urls = top_n(&conn, table, "path", &where_clause, &vals, |label| filter.with_path(label).href(base))?;
+    let top_ips = top_n(&conn, table, "remote_host", &where_clause, &vals, |label| filter.with_ip(label).href(base))?;
 
     // Time-range selector options.
-    let range_defs = [
-        ("1h", "Hour"),
-        ("24h", "24 h"),
-        ("7d", "Week"),
-        ("30d", "Month"),
-        ("1y", "Year"),
-    ];
+    let range_defs = [("1h", "Hour"), ("24h", "24 h"), ("7d", "Week"), ("30d", "Month"), ("1y", "Year")];
     let range_options: Vec<RangeOpt> = range_defs
         .iter()
         .map(|&(value, label)| RangeOpt {
             label: label.to_string(),
-            href: filter.with_range(value).href(),
+            href: filter.with_range(value).href(base),
             active: range == value,
         })
         .collect();
@@ -323,20 +312,19 @@ pub async fn dashboard(
     // Active-filter chips (ip/path/status; the range has its own selector).
     let mut chips: Vec<Chip> = Vec::new();
     if let Some(ip) = &filter.ip {
-        chips.push(Chip { label: format!("Client IP: {ip}"), remove: filter.without_ip().href() });
+        chips.push(Chip { label: format!("Client IP: {ip}"), remove: filter.without_ip().href(base) });
     }
     if let Some(path) = &filter.path {
-        chips.push(Chip { label: format!("URL: {path}"), remove: filter.without_path().href() });
+        chips.push(Chip { label: format!("URL: {path}"), remove: filter.without_path().href(base) });
     }
     if let Some(status) = filter.status {
-        chips.push(Chip {
-            label: format!("Status: {status}xx"),
-            remove: filter.without_status().href(),
-        });
+        chips.push(Chip { label: format!("Status: {status}xx"), remove: filter.without_status().href(base) });
     }
 
     let mut ctx = tera::Context::new();
-    ctx.insert("active", "apache");
+    ctx.insert("active", table);
+    ctx.insert("type_label", type_label);
+    ctx.insert("base", base);
     ctx.insert("kpis", &kpis);
     ctx.insert("timeline", &timeline);
     ctx.insert("timeline_max", &timeline_max);
@@ -350,20 +338,21 @@ pub async fn dashboard(
     ctx.insert("range_label", range_label(&range));
     ctx.insert("has_filters", &!chips.is_empty());
     ctx.insert("has_data", &(total_rows > 0));
-    Ok(Html(state.tera.render("apache.html", &ctx)?))
+    Ok(Html(state.tera.render(template, &ctx)?))
 }
 
 // Runs a "top N by count" query for `column` over the bounded set, turning each
 // row into a clickable Bar via `href_for(label)`.
 fn top_n(
     conn: &duckdb::Connection,
+    table: &str,
     column: &str,
     where_clause: &str,
     vals: &[Value],
     href_for: impl Fn(&str) -> String,
 ) -> Result<Vec<Bar>, AppError> {
     let sql = format!(
-        "SELECT {column}, count(*) c FROM apache {where_clause} \
+        "SELECT {column}, count(*) c FROM {table} {where_clause} \
          GROUP BY {column} ORDER BY c DESC, {column} LIMIT 10"
     );
     let mut stmt = conn.prepare(&sql)?;

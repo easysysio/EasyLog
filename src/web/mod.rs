@@ -30,6 +30,7 @@ use crate::sources::{self, Source};
 use crate::state::{AppState, WebState};
 
 mod apache;
+mod nginx;
 mod traefik;
 
 // Web assets compiled into the binary so the UI is served with no static/
@@ -54,6 +55,7 @@ pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
         .route("/sources/delete", post(delete_source))
         .route("/apache", get(apache::dashboard))
         .route("/apache/recent", get(apache_recent))
+        .route("/nginx", get(nginx::dashboard))
         .route("/traefik", get(traefik::dashboard))
         .route_layer(middleware::from_fn_with_state(
             WebState(state.clone()),

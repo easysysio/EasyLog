@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **nginx log type + dashboard.** nginx's default `combined` access log shares
+  Apache's format, so it reuses the Apache parser into an `nginx` table and serves
+  a `/nginx` dashboard. The combined-log dashboard renderer is now shared and
+  parameterized by table/route, used by both Apache and nginx. `nginx` appears in
+  the `/sources` log-type dropdown automatically.
+
 ### Fixed
 - **deb upgrades now always restart the service.** The post-install hook only
   restarted when the unit reported as `enabled`, which could be skipped on some
