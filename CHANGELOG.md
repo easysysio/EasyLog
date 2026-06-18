@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a `/nginx` dashboard. The combined-log dashboard renderer is now shared and
   parameterized by table/route, used by both Apache and nginx. `nginx` appears in
   the `/sources` log-type dropdown automatically.
+- **Light/dark theme toggle** in the navbar. The choice is saved in
+  `localStorage` and applied before paint (no flash), across the app and the
+  login/setup pages. Defaults to dark.
 
 ### Fixed
 - **deb upgrades now always restart the service.** The post-install hook only
