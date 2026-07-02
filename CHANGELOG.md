@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-06-17
+
 ### Fixed
 - **High memory use.** DuckDB defaults its memory limit to ~80% of system RAM and
   its buffer manager holds onto what it claims, so EasyLog's RSS could grow to
