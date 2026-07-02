@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-06-17
+
 ### Changed
 - **Config is no longer overwritten on upgrade.** The default `easylog.toml` is
   installed to `/etc/easylog/easylog.toml` **only on first install** (copied by the
