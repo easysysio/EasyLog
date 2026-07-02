@@ -27,6 +27,14 @@ pub struct Config {
     /// Path to the DuckDB database file.
     #[serde(default = "default_db_path")]
     pub db_path: String,
+    /// DuckDB memory limit (e.g. "256MB", "1GB"). DuckDB's own default is ~80% of
+    /// system RAM, which it holds onto; capping it keeps EasyLog lightweight.
+    /// Empty string leaves DuckDB's default in place.
+    #[serde(default = "default_duckdb_memory_limit")]
+    pub duckdb_memory_limit: String,
+    /// DuckDB worker threads (0 leaves DuckDB's default of one per core).
+    #[serde(default = "default_duckdb_threads")]
+    pub duckdb_threads: u16,
 }
 
 fn default_bind() -> String {
@@ -41,6 +49,12 @@ fn default_web_port() -> u16 {
 fn default_db_path() -> String {
     "easylog.duckdb".to_string()
 }
+fn default_duckdb_memory_limit() -> String {
+    "256MB".to_string()
+}
+fn default_duckdb_threads() -> u16 {
+    2
+}
 
 impl Default for Config {
     fn default() -> Self {
@@ -49,6 +63,8 @@ impl Default for Config {
             syslog_port: default_syslog_port(),
             web_port: default_web_port(),
             db_path: default_db_path(),
+            duckdb_memory_limit: default_duckdb_memory_limit(),
+            duckdb_threads: default_duckdb_threads(),
         }
     }
 }

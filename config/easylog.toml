@@ -16,5 +16,10 @@ web_port = 3000
 # DuckDB database file.
 db_path = "easylog.duckdb"
 
+# DuckDB memory cap (DuckDB defaults to ~80% of RAM). Raise for heavy queries
+# over large tables; set "" to use DuckDB's default. Threads: 0 = one per core.
+duckdb_memory_limit = "256MB"
+duckdb_threads = 2
+
 # Log sources (which sending host maps to which log type) are managed in the
 # database via the web UI at http://<host>:<web_port>/sources — not here.

@@ -16,3 +16,11 @@ web_port = 3000
 
 # DuckDB database file. /var/lib/easylog is created by the unit's StateDirectory.
 db_path = "/var/lib/easylog/easylog.duckdb"
+
+# DuckDB memory cap. DuckDB defaults to ~80% of system RAM and holds onto it, so
+# this keeps EasyLog lightweight. Raise it (e.g. "1GB") if you run heavy queries
+# over very large tables; set "" to use DuckDB's default.
+duckdb_memory_limit = "256MB"
+
+# DuckDB worker threads (0 = one per CPU core).
+duckdb_threads = 2

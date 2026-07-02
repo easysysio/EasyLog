@@ -79,7 +79,7 @@ async fn main() -> Result<()> {
 
     // Open storage and initialize schemas: one table per log type, plus sources.
     let registry = Registry::with_defaults();
-    let conn = storage::open(&config.db_path)?;
+    let conn = storage::open(&config.db_path, &config.duckdb_memory_limit, config.duckdb_threads)?;
     registry.init_all(&conn)?;
     sources::init_schema(&conn)?;
     let source_map: HashMap<String, sources::Source> = sources::load_map(&conn)?;
@@ -93,11 +93,12 @@ async fn main() -> Result<()> {
     let tera = load_templates()?;
 
     tracing::info!(
-        "config: syslog {}:{} (udp+tcp), web :{}, db {}, {} source(s)",
+        "config: syslog {}:{} (udp+tcp), web :{}, db {}, duckdb mem {}, {} source(s)",
         config.syslog_bind,
         config.syslog_port,
         config.web_port,
         config.db_path,
+        config.duckdb_memory_limit,
         source_map.len(),
     );
 
