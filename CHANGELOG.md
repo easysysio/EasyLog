@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Config is no longer overwritten on upgrade.** The default `easylog.toml` is
+  installed to `/etc/easylog/easylog.toml` **only on first install** (copied by the
+  post-install script from `/usr/share/easylog/`) and left untouched on every
+  upgrade — it's no longer registered as a dpkg conffile / rpm `%config`. EasyLog
+  fills in defaults for any keys missing from an older config, so upgrades never
+  disturb your settings.
+
 ## [0.3.1] — 2026-06-17
 
 ### Fixed

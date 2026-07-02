@@ -3,12 +3,20 @@
 # unit file and binary take effect (cargo-deb adds no systemd hooks by default).
 set -e
 
-if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
-    systemctl daemon-reload >/dev/null 2>&1 || true
-    # Restart if the service is currently running (no-op otherwise), so an upgrade
-    # always picks up the new binary/unit without a manual restart — regardless of
-    # whether the unit is "enabled".
-    systemctl try-restart easylog.service >/dev/null 2>&1 || true
+if [ "$1" = "configure" ]; then
+    # Install the default config only on first install; never overwrite an
+    # existing one on upgrade (the config is not a dpkg conffile).
+    if [ ! -e /etc/easylog/easylog.toml ] && [ -e /usr/share/easylog/easylog.toml ]; then
+        mkdir -p /etc/easylog
+        cp /usr/share/easylog/easylog.toml /etc/easylog/easylog.toml
+    fi
+
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload >/dev/null 2>&1 || true
+        # Restart if the service is currently running (no-op otherwise), so an
+        # upgrade always picks up the new binary/unit without a manual restart.
+        systemctl try-restart easylog.service >/dev/null 2>&1 || true
+    fi
 fi
 
 exit 0

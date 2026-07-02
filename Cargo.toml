@@ -39,11 +39,13 @@ extended-description = "EasyLog is a multi-log analyzer: it ingests logs over sy
 section = "utils"
 priority = "optional"
 depends = "$auto"
-conf-files = ["/etc/easylog/easylog.toml"]
 maintainer-scripts = "packaging/deb"
+# The default config is shipped to /usr/share and copied to /etc/easylog by the
+# postinst only if absent, so upgrades never overwrite an admin's config (it is
+# intentionally NOT a dpkg conffile).
 assets = [
     ["target/release/easylog", "usr/bin/", "755"],
-    ["packaging/easylog.toml", "etc/easylog/easylog.toml", "644"],
+    ["packaging/easylog.toml", "usr/share/easylog/easylog.toml", "644"],
     ["packaging/easylog.service", "usr/lib/systemd/system/easylog.service", "644"],
     ["README.md", "usr/share/doc/easylog/README.md", "644"],
     ["examples/rsyslog/apache-access.conf", "usr/share/doc/easylog/examples/rsyslog/apache-access.conf", "644"],
@@ -55,6 +57,10 @@ summary = "EasyLog — a multi-log analyzer (syslog ingest, dashboard per log ty
 auto-req = "no"
 # Reload systemd and restart on install/upgrade so the new unit + binary apply.
 post_install_script = """
+if [ ! -e /etc/easylog/easylog.toml ] && [ -e /usr/share/easylog/easylog.toml ]; then
+    mkdir -p /etc/easylog
+    cp /usr/share/easylog/easylog.toml /etc/easylog/easylog.toml
+fi
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || true
     systemctl try-restart easylog.service >/dev/null 2>&1 || true
@@ -62,7 +68,7 @@ fi
 """
 assets = [
     { source = "target/release/easylog", dest = "/usr/bin/easylog", mode = "755" },
-    { source = "packaging/easylog.toml", dest = "/etc/easylog/easylog.toml", mode = "644", config = true },
+    { source = "packaging/easylog.toml", dest = "/usr/share/easylog/easylog.toml", mode = "644" },
     { source = "packaging/easylog.service", dest = "/usr/lib/systemd/system/easylog.service", mode = "644" },
     { source = "README.md", dest = "/usr/share/doc/easylog/README.md", mode = "644", doc = true },
     { source = "examples/rsyslog/apache-access.conf", dest = "/usr/share/doc/easylog/examples/rsyslog/apache-access.conf", mode = "644", doc = true },
