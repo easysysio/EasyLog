@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fills in defaults for any keys missing from an older config, so upgrades never
   disturb your settings.
 
+### Fixed
+- **Service now reliably restarts on upgrade.** The post-install hook used
+  `systemctl try-restart`, which is a no-op when the unit isn't "active" at that
+  instant (e.g. after a crash/OOM). It now runs `systemctl restart` on upgrade,
+  which also brings the service back if it had stopped. Verified against the
+  built `.deb`.
+
 ## [0.3.1] — 2026-06-17
 
 ### Fixed

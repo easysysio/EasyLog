@@ -63,7 +63,10 @@ if [ ! -e /etc/easylog/easylog.toml ] && [ -e /usr/share/easylog/easylog.toml ];
 fi
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || true
-    systemctl try-restart easylog.service >/dev/null 2>&1 || true
+    # $1 >= 2 means upgrade: always restart so the new binary takes effect.
+    if [ "$1" -ge 2 ]; then
+        systemctl restart easylog.service >/dev/null 2>&1 || true
+    fi
 fi
 """
 assets = [
