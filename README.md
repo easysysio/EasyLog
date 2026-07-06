@@ -8,8 +8,8 @@ EasyLog ingests logs over **syslog**, parses each source by type, stores the
 parsed events in an embedded **DuckDB** column store, and serves a live
 **dashboard per log type** — all from a single, dependency-free binary.
 
-[![Release](https://github.com/yarivha/EasyLog/actions/workflows/release.yml/badge.svg)](https://github.com/yarivha/EasyLog/actions/workflows/release.yml)
-[![Latest release](https://img.shields.io/github/v/release/yarivha/EasyLog?sort=semver)](https://github.com/yarivha/EasyLog/releases)
+[![Release](https://github.com/easysysio/EasyLog/actions/workflows/release.yml/badge.svg)](https://github.com/easysysio/EasyLog/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/easysysio/EasyLog?sort=semver)](https://github.com/easysysio/EasyLog/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.95%2B-orange.svg)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/Linux-x86__64%20%7C%20arm64-informational.svg)](#installation)
@@ -70,7 +70,7 @@ DuckDB.
 ### From packages (recommended)
 
 Download the `.deb` or `.rpm` for your architecture from the
-[latest release](https://github.com/yarivha/EasyLog/releases):
+[latest release](https://github.com/easysysio/EasyLog/releases):
 
 ```sh
 # Debian / Ubuntu
@@ -102,7 +102,7 @@ account**, after which the UI requires login.
 Requires a Rust toolchain (1.95+) and a C/C++ compiler (for the bundled DuckDB).
 
 ```sh
-git clone https://github.com/yarivha/EasyLog.git
+git clone https://github.com/easysysio/EasyLog.git
 cd EasyLog
 cargo build --release
 ./target/release/easylog

@@ -2,7 +2,7 @@
 # Enable + start with:  sudo systemctl enable --now easylog
 [Unit]
 Description=EasyLog multi-log analyzer
-Documentation=https://github.com/yarivha/EasyLog
+Documentation=https://github.com/easysysio/EasyLog
 After=network-online.target
 Wants=network-online.target
 
