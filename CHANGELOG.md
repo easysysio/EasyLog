@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The bundled geolocation database is now refreshed at release time.** DB-IP
+  republishes DB-IP Lite monthly, so the release workflow downloads the current
+  edition and compiles that into the published binaries instead of shipping
+  whatever was last committed. If the download fails or doesn't validate, the
+  release still goes ahead with the committed copy.
+
 ## [0.4.0] — 2026-08-15
 
 ### Added

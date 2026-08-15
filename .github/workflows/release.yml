@@ -37,6 +37,39 @@ jobs:
       - name: Install packaging tools
         run: cargo install cargo-deb cargo-generate-rpm --locked
 
+      # The DB-IP Lite country database is compiled into the binary
+      # (include_bytes! in src/geo.rs). DB-IP republishes it monthly, so each
+      # release embeds the newest edition rather than whatever was committed.
+      # The checked-in copy is the fallback: a failed or corrupt download must
+      # never fail a release, it just ships a slightly older database.
+      - name: Refresh bundled geolocation database
+        run: |
+          set -uo pipefail
+          asset="assets/geo/dbip-country-lite.mmdb"
+          # The current month appears a day or two into the month, so fall back
+          # to the previous one.
+          for month in "$(date -u +%Y-%m)" "$(date -u -d '1 month ago' +%Y-%m)"; do
+            url="https://download.db-ip.com/free/dbip-country-lite-${month}.mmdb.gz"
+            echo "::group::Trying ${url}"
+            if curl -fsSL --max-time 180 -o /tmp/geo.mmdb.gz "$url" \
+               && gunzip -f /tmp/geo.mmdb.gz; then
+              size=$(stat -c%s /tmp/geo.mmdb)
+              # A truncated download or an HTML error page would still gunzip to
+              # something; require a plausible size and MaxMind's metadata
+              # marker before letting it replace the committed database.
+              if [ "$size" -gt 4000000 ] \
+                 && grep -qa $'\xab\xcd\xefMaxMind.com' /tmp/geo.mmdb; then
+                mv /tmp/geo.mmdb "$asset"
+                echo "Embedding DB-IP Lite ${month} (${size} bytes)"
+                echo "::endgroup::"
+                exit 0
+              fi
+              echo "Rejected ${month}: failed validation (${size} bytes)"
+            fi
+            echo "::endgroup::"
+          done
+          echo "::warning::Could not refresh the geolocation database; embedding the committed copy ($(stat -c%s "$asset") bytes)"
+
       - name: Build release binary
         run: cargo build --release --locked
 

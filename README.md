@@ -245,7 +245,9 @@ Released under the [MIT License](LICENSE).
 ### Bundled data
 
 - IP geolocation by [DB-IP](https://db-ip.com) — DB-IP Lite country database,
-  licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+  licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Released
+  binaries embed the edition current at build time (the release workflow fetches
+  it); set `geo_db_path` to use your own `.mmdb` between releases.
 - Country boundaries from [Natural Earth](https://www.naturalearthdata.com/)
   (public domain), simplified into `assets/geo/world.svg` by
   [`tools/build-world-svg.py`](tools/build-world-svg.py).
