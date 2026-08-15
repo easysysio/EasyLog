@@ -24,3 +24,9 @@ duckdb_memory_limit = "256MB"
 
 # DuckDB worker threads (0 = one per CPU core).
 duckdb_threads = 2
+
+# IP geolocation database. EasyLog bundles the DB-IP Lite country database and
+# resolves each client IP to a country at ingest time — no configuration needed.
+# Set this to an external MaxMind-format .mmdb (e.g. a MaxMind GeoLite2 file) to
+# override the bundled data; leave empty to use the bundled database.
+geo_db_path = ""

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **IP geolocation on every dashboard.** EasyLog now resolves each client IP to a
+  country at ingest time and surfaces it across the UI:
+  - A **Countries** KPI and a **Top countries** panel (click a country to filter the
+    whole dashboard to its traffic) on the Apache, Nginx, and Traefik dashboards.
+  - A **Countries** KPI and a **Logs by country** pie on the Home overview.
+  - Country lookups are fully offline. EasyLog **bundles the DB-IP Lite country
+    database** (embedded in the binary — nothing to install), and you can point
+    `geo_db_path` at an external MaxMind-format `.mmdb` (e.g. MaxMind GeoLite2) to
+    override it.
+  - New `country` / `country_code` columns are added to existing databases
+    automatically on upgrade (backfilled for new rows only).
+  - Attribution: IP geolocation by [DB-IP](https://db-ip.com) (CC BY 4.0).
+
 ## [0.3.2] — 2026-06-17
 
 ### Changed

@@ -11,6 +11,7 @@
 
 mod auth;
 mod config;
+mod geo;
 mod logtype;
 mod sources;
 mod state;
@@ -76,6 +77,9 @@ async fn main() -> Result<()> {
 
     let config_path = std::env::var("EASYLOG_CONFIG").unwrap_or_else(|_| DEFAULT_CONFIG.to_string());
     let config = Config::load(&config_path)?;
+
+    // Load the IP geolocation database (bundled DB-IP Lite, or an external mmdb).
+    geo::init(&config.geo_db_path);
 
     // Open storage and initialize schemas: one table per log type, plus sources.
     let registry = Registry::with_defaults();

@@ -61,22 +61,26 @@ impl LogType for Traefik {
         conn.execute_batch(
             r#"
             CREATE TABLE IF NOT EXISTS traefik (
-                source_ip   VARCHAR,
-                remote_host VARCHAR,
-                ts          TIMESTAMP,
-                method      VARCHAR,
-                path        VARCHAR,
-                protocol    VARCHAR,
-                status      INTEGER,
-                bytes       BIGINT,
-                router      VARCHAR,
-                service     VARCHAR,
-                duration_ms DOUBLE,
-                user_agent  VARCHAR,
-                host        VARCHAR,
-                received_at TIMESTAMP,
-                raw         VARCHAR
+                source_ip    VARCHAR,
+                remote_host  VARCHAR,
+                ts           TIMESTAMP,
+                method       VARCHAR,
+                path         VARCHAR,
+                protocol     VARCHAR,
+                status       INTEGER,
+                bytes        BIGINT,
+                router       VARCHAR,
+                service      VARCHAR,
+                duration_ms  DOUBLE,
+                user_agent   VARCHAR,
+                host         VARCHAR,
+                country      VARCHAR,
+                country_code VARCHAR,
+                received_at  TIMESTAMP,
+                raw          VARCHAR
             );
+            ALTER TABLE traefik ADD COLUMN IF NOT EXISTS country VARCHAR;
+            ALTER TABLE traefik ADD COLUMN IF NOT EXISTS country_code VARCHAR;
             "#,
         )?;
         Ok(())
@@ -106,14 +110,19 @@ impl LogType for Traefik {
         let duration_ms = j.duration_ns.map(|ns| ns as f64 / 1_000_000.0);
         let status = j.status.map(|s| s as i32);
 
+        // Resolve the client IP to a country at ingest time (offline lookup).
+        let client_host = j.client_host.unwrap_or_default();
+        let (country_code, country) = crate::geo::lookup(&client_host);
+
         conn.execute(
             r#"INSERT INTO traefik
                (source_ip, remote_host, ts, method, path, protocol, status, bytes,
-                router, service, duration_ms, user_agent, host, received_at, raw)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"#,
+                router, service, duration_ms, user_agent, host, country, country_code,
+                received_at, raw)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"#,
             params![
                 meta.source_ip,
-                j.client_host.unwrap_or_default(),
+                client_host,
                 ts,
                 j.method.unwrap_or_default(),
                 j.path.unwrap_or_default(),
@@ -125,6 +134,8 @@ impl LogType for Traefik {
                 duration_ms,
                 j.user_agent.unwrap_or_default(),
                 j.host.unwrap_or_default(),
+                country,
+                country_code,
                 meta.received_at.naive_utc(),
                 raw,
             ],

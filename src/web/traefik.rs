@@ -36,6 +36,8 @@ pub(crate) struct Filter {
     #[serde(skip_serializing_if = "Option::is_none")]
     service: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    country: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     range: Option<String>,
 }
 
@@ -49,6 +51,7 @@ impl Filter {
             status: self.status,
             router: clean(self.router),
             service: clean(self.service),
+            country: clean(self.country),
             range,
         }
     }
@@ -75,6 +78,9 @@ impl Filter {
     fn with_service(&self, v: &str) -> Filter {
         Filter { service: Some(v.to_string()), ..self.clone() }
     }
+    fn with_country(&self, v: &str) -> Filter {
+        Filter { country: Some(v.to_string()), ..self.clone() }
+    }
     fn with_range(&self, v: &str) -> Filter {
         Filter { range: Some(v.to_string()), ..self.clone() }
     }
@@ -92,6 +98,9 @@ impl Filter {
     }
     fn without_service(&self) -> Filter {
         Filter { service: None, ..self.clone() }
+    }
+    fn without_country(&self) -> Filter {
+        Filter { country: None, ..self.clone() }
     }
 
     fn range_key(&self) -> &str {
@@ -120,6 +129,10 @@ impl Filter {
         if let Some(service) = &self.service {
             conds.push("service = ?".to_string());
             vals.push(Value::Text(service.clone()));
+        }
+        if let Some(country) = &self.country {
+            conds.push("coalesce(nullif(country, ''), 'Unknown') = ?".to_string());
+            vals.push(Value::Text(country.clone()));
         }
         let dur = match self.range_key() {
             "1h" => Duration::hours(1),
@@ -152,6 +165,7 @@ struct Chip {
 struct Kpis {
     requests: i64,
     unique_ips: i64,
+    countries: i64,
     total_bytes: String,
     error_rate: String,
     avg_ms: String,
@@ -190,7 +204,8 @@ pub async fn dashboard(
     };
 
     // KPIs incl. average and p95 duration (NULL durations are ignored).
-    let (requests, unique_ips, total_bytes, errors, avg_ms, p95_ms): (
+    let (requests, unique_ips, countries, total_bytes, errors, avg_ms, p95_ms): (
+        i64,
         i64,
         i64,
         i64,
@@ -200,6 +215,7 @@ pub async fn dashboard(
     ) = {
         let sql = format!(
             "SELECT count(*), count(DISTINCT remote_host), \
+             count(DISTINCT country_code) FILTER (WHERE country_code IS NOT NULL AND country_code <> ''), \
              CAST(coalesce(sum(bytes), 0) AS BIGINT), \
              count(*) FILTER (WHERE status >= 400), \
              avg(duration_ms), quantile_cont(duration_ms, 0.95) \
@@ -207,9 +223,9 @@ pub async fn dashboard(
         );
         let mut stmt = conn.prepare(&sql)?;
         let mut rows = stmt.query_map(params_from_iter(vals.iter()), |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?))
         })?;
-        rows.next().transpose()?.unwrap_or((0, 0, 0, 0, None, None))
+        rows.next().transpose()?.unwrap_or((0, 0, 0, 0, 0, None, None))
     };
 
     let error_rate = if requests > 0 {
@@ -220,6 +236,7 @@ pub async fn dashboard(
     let kpis = Kpis {
         requests,
         unique_ips,
+        countries,
         total_bytes: human_bytes(total_bytes),
         error_rate,
         avg_ms: fmt_ms(avg_ms),
@@ -294,6 +311,13 @@ pub async fn dashboard(
     let top_ips = top_n(&conn, "remote_host", &where_clause, &vals, |l| filter.with_ip(l).href())?;
     let top_routers = top_n(&conn, "router", &where_clause, &vals, |l| filter.with_router(l).href())?;
     let top_services = top_n(&conn, "service", &where_clause, &vals, |l| filter.with_service(l).href())?;
+    let top_countries = top_n(
+        &conn,
+        "coalesce(nullif(country, ''), 'Unknown')",
+        &where_clause,
+        &vals,
+        |l| filter.with_country(l).href(),
+    )?;
 
     // Time-range selector.
     let range_defs = [
@@ -329,6 +353,9 @@ pub async fn dashboard(
     if let Some(service) = &filter.service {
         chips.push(Chip { label: format!("Service: {service}"), remove: filter.without_service().href() });
     }
+    if let Some(country) = &filter.country {
+        chips.push(Chip { label: format!("Country: {country}"), remove: filter.without_country().href() });
+    }
 
     let mut ctx = tera::Context::new();
     ctx.insert("active", "traefik");
@@ -342,6 +369,7 @@ pub async fn dashboard(
     ctx.insert("top_ips", &top_ips);
     ctx.insert("top_routers", &top_routers);
     ctx.insert("top_services", &top_services);
+    ctx.insert("top_countries", &top_countries);
     ctx.insert("chips", &chips);
     ctx.insert("range_options", &range_options);
     ctx.insert("range_label", range_label(&range));

@@ -21,5 +21,10 @@ db_path = "easylog.duckdb"
 duckdb_memory_limit = "256MB"
 duckdb_threads = 2
 
+# IP geolocation: EasyLog bundles the DB-IP Lite country database and resolves
+# client IPs to countries at ingest — no setup needed. Point this at an external
+# MaxMind-format .mmdb to override; leave empty to use the bundled database.
+geo_db_path = ""
+
 # Log sources (which sending host maps to which log type) are managed in the
 # database via the web UI at http://<host>:<web_port>/sources — not here.

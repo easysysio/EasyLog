@@ -63,6 +63,12 @@
   </div>
   <div class="col-6 col-lg-2">
     <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-globe2 me-1"></i>Countries</h6>
+      <div class="stat-value">{{ kpis.countries }}</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-2">
+    <div class="card h-100"><div class="card-body">
       <h6 class="section-title mb-2"><i class="bi bi-download me-1"></i>Bytes</h6>
       <div class="stat-value">{{ kpis.total_bytes }}</div>
     </div></div>
@@ -182,7 +188,23 @@
       {% endfor %}
     </tbody></table>
   </div></div></div>
+  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-globe2 me-1"></i>Top countries <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in top_countries %}
+      <tr>
+        <td class="small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
 </div>
+
+<p class="text-secondary small mt-4 mb-0">
+  IP geolocation by <a href="https://db-ip.com" class="text-secondary" rel="noopener">DB-IP</a> (CC BY 4.0).
+</p>
 
 {% endif %}{# requests == 0 #}
 {% endif %}{# not has_data #}

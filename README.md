@@ -28,7 +28,12 @@ parsed events in an embedded **DuckDB** column store, and serves a live
   re-ingest, and you can always drill down to the underlying log lines.
 - 📊 **Dashboard per log type** — KPI cards, request timelines, status-code
   breakdowns, and top-N tables, rendered server-side. **Click any client IP,
-  URL, or status code to drill down** — filters stack and are shareable by URL.
+  URL, status code, or country to drill down** — filters stack and are shareable
+  by URL.
+- 🌍 **IP geolocation, fully offline** — every client IP is resolved to a country
+  at ingest, powering a Countries KPI, Top-countries panels, and a country
+  breakdown on the overview. The **DB-IP Lite country database is bundled** in the
+  binary (nothing to install); point `geo_db_path` at a MaxMind `.mmdb` to override.
 - 🎛️ **Web-managed sources** — map a sending host to a log type from the UI; no
   config edits or restarts required.
 - 🔒 **Authentication** — admin account created on first run; the web UI is
@@ -121,6 +126,7 @@ syslog_bind = "0.0.0.0"   # address the UDP+TCP listeners bind to
 syslog_port = 514         # standard syslog; use 5514 to run without privileges
 web_port    = 3000        # web UI / dashboards
 db_path     = "easylog.duckdb"
+geo_db_path = ""          # external MaxMind .mmdb; empty = bundled DB-IP Lite
 ```
 
 Log sources are **not** configured here — they're managed in the database via the

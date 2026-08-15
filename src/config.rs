@@ -35,6 +35,10 @@ pub struct Config {
     /// DuckDB worker threads (0 leaves DuckDB's default of one per core).
     #[serde(default = "default_duckdb_threads")]
     pub duckdb_threads: u16,
+    /// Path to an external MaxMind-format geolocation `.mmdb` (e.g. a MaxMind
+    /// GeoLite2 DB). Empty uses the bundled DB-IP Lite country database.
+    #[serde(default)]
+    pub geo_db_path: String,
 }
 
 fn default_bind() -> String {
@@ -65,6 +69,7 @@ impl Default for Config {
             db_path: default_db_path(),
             duckdb_memory_limit: default_duckdb_memory_limit(),
             duckdb_threads: default_duckdb_threads(),
+            geo_db_path: String::new(),
         }
     }
 }

@@ -19,27 +19,31 @@
   </div>
 {% else %}
 
-<div class="row g-3 mb-4">
-  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body">
+<div class="row row-cols-2 row-cols-lg-5 g-3 mb-4">
+  <div class="col"><div class="card h-100"><div class="card-body">
     <h6 class="section-title mb-2"><i class="bi bi-collection me-1"></i>Total logs</h6>
     <div class="stat-value">{{ total_logs }}</div>
   </div></div></div>
-  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body">
+  <div class="col"><div class="card h-100"><div class="card-body">
     <h6 class="section-title mb-2"><i class="bi bi-clock-history me-1"></i>Last 24h</h6>
     <div class="stat-value">{{ last24 }}</div>
   </div></div></div>
-  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body">
+  <div class="col"><div class="card h-100"><div class="card-body">
     <h6 class="section-title mb-2"><i class="bi bi-speedometer me-1"></i>Logs/min <span class="text-secondary">(24h avg)</span></h6>
     <div class="stat-value">{{ avg_per_min }}</div>
   </div></div></div>
-  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body">
+  <div class="col"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-globe2 me-1"></i>Countries</h6>
+    <div class="stat-value">{{ country_count }}</div>
+  </div></div></div>
+  <div class="col"><div class="card h-100"><div class="card-body">
     <h6 class="section-title mb-2"><i class="bi bi-hdd-network me-1"></i>Sources</h6>
     <div class="stat-value">{{ source_count }}</div>
   </div></div></div>
 </div>
 
 <div class="row g-4">
-  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+  <div class="col-lg-4"><div class="card h-100"><div class="card-body">
     <h6 class="section-title mb-3"><i class="bi bi-pie-chart me-1"></i>Logs by source</h6>
     <div class="d-flex align-items-center gap-4">
       <div class="pie" style="background: conic-gradient({{ source_gradient }})"></div>
@@ -56,7 +60,7 @@
     </div>
   </div></div></div>
 
-  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+  <div class="col-lg-4"><div class="card h-100"><div class="card-body">
     <h6 class="section-title mb-3"><i class="bi bi-pie-chart me-1"></i>Logs by type</h6>
     <div class="d-flex align-items-center gap-4">
       <div class="pie" style="background: conic-gradient({{ type_gradient }})"></div>
@@ -72,6 +76,27 @@
       </div>
     </div>
   </div></div></div>
+
+  <div class="col-lg-4"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-globe-americas me-1"></i>Logs by country</h6>
+    <div class="d-flex align-items-center gap-4">
+      <div class="pie" style="background: conic-gradient({{ country_gradient }})"></div>
+      <div class="flex-grow-1" style="min-width:0">
+        {% for s in country_slices %}
+        <div class="d-flex align-items-center small mb-1">
+          <span class="pie-dot me-2" style="background:{{ s.color }}"></span>
+          <span class="text-truncate flex-grow-1">{{ s.label }}</span>
+          <span class="text-secondary font-monospace ms-2">{{ s.count }}</span>
+          <span class="text-secondary ms-2" style="width:48px;text-align:right">{{ s.pct }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div></div></div>
 </div>
+
+<p class="text-secondary small mt-4 mb-0">
+  IP geolocation by <a href="https://db-ip.com" class="text-secondary" rel="noopener">DB-IP</a> (CC BY 4.0).
+</p>
 {% endif %}
 {% endblock %}

@@ -107,21 +107,25 @@ impl LogType for Apache {
         conn.execute_batch(
             r#"
             CREATE TABLE IF NOT EXISTS apache (
-                source_ip   VARCHAR,
-                remote_host VARCHAR,
-                ident       VARCHAR,
-                auth_user   VARCHAR,
-                ts          TIMESTAMP,
-                method      VARCHAR,
-                path        VARCHAR,
-                protocol    VARCHAR,
-                status      INTEGER,
-                bytes       BIGINT,
-                referer     VARCHAR,
-                user_agent  VARCHAR,
-                received_at TIMESTAMP,
-                raw         VARCHAR
+                source_ip    VARCHAR,
+                remote_host  VARCHAR,
+                ident        VARCHAR,
+                auth_user    VARCHAR,
+                ts           TIMESTAMP,
+                method       VARCHAR,
+                path         VARCHAR,
+                protocol     VARCHAR,
+                status       INTEGER,
+                bytes        BIGINT,
+                referer      VARCHAR,
+                user_agent   VARCHAR,
+                country      VARCHAR,
+                country_code VARCHAR,
+                received_at  TIMESTAMP,
+                raw          VARCHAR
             );
+            ALTER TABLE apache ADD COLUMN IF NOT EXISTS country VARCHAR;
+            ALTER TABLE apache ADD COLUMN IF NOT EXISTS country_code VARCHAR;
             "#,
         )?;
         Ok(())
@@ -136,11 +140,14 @@ impl LogType for Apache {
         let Some(e) = parse_line(raw) else {
             return Ok(false);
         };
+        // Resolve the client IP to a country at ingest time (offline lookup).
+        let (country_code, country) = crate::geo::lookup(&e.remote_host);
         conn.execute(
             r#"INSERT INTO apache
                (source_ip, remote_host, ident, auth_user, ts, method, path,
-                protocol, status, bytes, referer, user_agent, received_at, raw)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"#,
+                protocol, status, bytes, referer, user_agent, country, country_code,
+                received_at, raw)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"#,
             params![
                 meta.source_ip,
                 e.remote_host,
@@ -154,6 +161,8 @@ impl LogType for Apache {
                 e.bytes,
                 e.referer,
                 e.user_agent,
+                country,
+                country_code,
                 meta.received_at.naive_utc(),
                 raw,
             ],

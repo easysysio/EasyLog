@@ -23,6 +23,7 @@ toml = "0.8"
 anyhow = "1"
 chrono = "0.4"
 tera = "1"
+maxminddb = "0.24"
 
 # Linux-only: raw SO_RCVBUFFORCE setsockopt to bypass net.core.rmem_max for the
 # UDP receive buffer (see src/syslog/mod.rs). Not needed on other platforms.

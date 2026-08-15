@@ -313,6 +313,8 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
     let mut last24: i64 = 0;
     let mut by_type: Vec<(String, i64)> = Vec::new();
     let mut by_ip: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    let mut by_country: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    let mut country_codes: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     {
         let conn = state.db.lock().expect("db mutex poisoned");
@@ -339,6 +341,29 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
                 let (ip, c) = row?;
                 *by_ip.entry(ip).or_insert(0) += c;
             }
+
+            // Requests by country (across all types) for the overview pie, plus
+            // the set of distinct real country codes for the "Countries" KPI.
+            let mut sc = conn.prepare(&format!(
+                "SELECT coalesce(nullif(country, ''), 'Unknown'), country_code, count(*) FROM {name} \
+                 GROUP BY 1, 2"
+            ))?;
+            let crows = sc.query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })?;
+            for row in crows {
+                let (country, code, c) = row?;
+                *by_country.entry(country).or_insert(0) += c;
+                if let Some(code) = code {
+                    if !code.is_empty() {
+                        country_codes.insert(code);
+                    }
+                }
+            }
         }
     }
 
@@ -352,6 +377,7 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
     };
     let (source_gradient, source_slices) = build_pie(by_source);
     let (type_gradient, type_slices) = build_pie(by_type);
+    let (country_gradient, country_slices) = build_pie(by_country.into_iter().collect());
 
     let mut ctx = tera::Context::new();
     ctx.insert("active", "home");
@@ -360,10 +386,13 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
     ctx.insert("total_logs", &total);
     ctx.insert("last24", &last24);
     ctx.insert("avg_per_min", &format!("{:.2}", last24 as f64 / 1440.0));
+    ctx.insert("country_count", &country_codes.len());
     ctx.insert("source_gradient", &source_gradient);
     ctx.insert("source_slices", &source_slices);
     ctx.insert("type_gradient", &type_gradient);
     ctx.insert("type_slices", &type_slices);
+    ctx.insert("country_gradient", &country_gradient);
+    ctx.insert("country_slices", &country_slices);
     ctx.insert("has_data", &(total > 0));
     Ok(Html(state.tera.render("index.html", &ctx)?))
 }

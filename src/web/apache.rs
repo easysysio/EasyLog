@@ -38,6 +38,8 @@ pub(crate) struct Filter {
     #[serde(skip_serializing_if = "Option::is_none")]
     status: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    country: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     range: Option<String>,
 }
 
@@ -50,6 +52,7 @@ impl Filter {
             ip: clean(self.ip),
             path: clean(self.path),
             status: self.status,
+            country: clean(self.country),
             range,
         }
     }
@@ -71,6 +74,9 @@ impl Filter {
     fn with_status(&self, v: i32) -> Filter {
         Filter { status: Some(v), ..self.clone() }
     }
+    fn with_country(&self, v: &str) -> Filter {
+        Filter { country: Some(v.to_string()), ..self.clone() }
+    }
     fn with_range(&self, v: &str) -> Filter {
         Filter { range: Some(v.to_string()), ..self.clone() }
     }
@@ -82,6 +88,9 @@ impl Filter {
     }
     fn without_status(&self) -> Filter {
         Filter { status: None, ..self.clone() }
+    }
+    fn without_country(&self) -> Filter {
+        Filter { country: None, ..self.clone() }
     }
 
     // Effective time range key (defaults to 24h).
@@ -105,6 +114,10 @@ impl Filter {
         if let Some(status) = self.status {
             conds.push("CAST(status / 100 AS INTEGER) = ?".to_string());
             vals.push(Value::Int(status));
+        }
+        if let Some(country) = &self.country {
+            conds.push("coalesce(nullif(country, ''), 'Unknown') = ?".to_string());
+            vals.push(Value::Text(country.clone()));
         }
         let dur = match self.range_key() {
             "1h" => Duration::hours(1),
@@ -163,6 +176,7 @@ struct Chip {
 struct Kpis {
     requests: i64,
     unique_ips: i64,
+    countries: i64,
     total_bytes: String, // human-readable
     error_rate: String,  // e.g. "4.2%"
 }
@@ -220,17 +234,18 @@ pub(crate) fn render(
     };
 
     // KPIs over the bounded set, in a single pass.
-    let (requests, unique_ips, total_bytes, errors): (i64, i64, i64, i64) = {
+    let (requests, unique_ips, countries, total_bytes, errors): (i64, i64, i64, i64, i64) = {
         let sql = format!(
             "SELECT count(*), count(DISTINCT remote_host), \
+             count(DISTINCT country_code) FILTER (WHERE country_code IS NOT NULL AND country_code <> ''), \
              CAST(coalesce(sum(bytes), 0) AS BIGINT), \
              count(*) FILTER (WHERE status >= 400) FROM {table} {where_clause}"
         );
         let mut stmt = conn.prepare(&sql)?;
         let mut rows = stmt.query_map(params_from_iter(vals.iter()), |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
         })?;
-        rows.next().transpose()?.unwrap_or((0, 0, 0, 0))
+        rows.next().transpose()?.unwrap_or((0, 0, 0, 0, 0))
     };
 
     let error_rate = if requests > 0 {
@@ -241,6 +256,7 @@ pub(crate) fn render(
     let kpis = Kpis {
         requests,
         unique_ips,
+        countries,
         total_bytes: human_bytes(total_bytes),
         error_rate,
     };
@@ -298,6 +314,16 @@ pub(crate) fn render(
     let top_urls = top_n(&conn, table, "path", &where_clause, &vals, |label| filter.with_path(label).href(base))?;
     let top_ips = top_n(&conn, table, "remote_host", &where_clause, &vals, |label| filter.with_ip(label).href(base))?;
 
+    // Top 10 countries — each clickable to filter to that country's traffic.
+    let top_countries = top_n(
+        &conn,
+        table,
+        "coalesce(nullif(country, ''), 'Unknown')",
+        &where_clause,
+        &vals,
+        |label| filter.with_country(label).href(base),
+    )?;
+
     // Time-range selector options.
     let range_defs = [("1h", "Hour"), ("24h", "24 h"), ("7d", "Week"), ("30d", "Month"), ("1y", "Year")];
     let range_options: Vec<RangeOpt> = range_defs
@@ -320,6 +346,9 @@ pub(crate) fn render(
     if let Some(status) = filter.status {
         chips.push(Chip { label: format!("Status: {status}xx"), remove: filter.without_status().href(base) });
     }
+    if let Some(country) = &filter.country {
+        chips.push(Chip { label: format!("Country: {country}"), remove: filter.without_country().href(base) });
+    }
 
     let mut ctx = tera::Context::new();
     ctx.insert("active", table);
@@ -333,6 +362,7 @@ pub(crate) fn render(
     ctx.insert("statuses", &statuses);
     ctx.insert("top_urls", &top_urls);
     ctx.insert("top_ips", &top_ips);
+    ctx.insert("top_countries", &top_countries);
     ctx.insert("chips", &chips);
     ctx.insert("range_options", &range_options);
     ctx.insert("range_label", range_label(&range));
