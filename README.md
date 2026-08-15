@@ -73,19 +73,49 @@ DuckDB.
 
 ## Installation
 
-### From packages (recommended)
+### From the package repository (recommended)
 
-Download the `.deb` or `.rpm` for your architecture from the
-[latest release](https://github.com/easysysio/EasyLog/releases):
+Installing from the EasySYS repository means upgrades come through your package
+manager. Packages are published for **x86_64** and **arm64**; your package
+manager picks the right one.
 
 ```sh
 # Debian / Ubuntu
-sudo dpkg -i easylog_*_amd64.deb        # or _arm64.deb
+curl -fsSL https://repo.easysys.io/easylog/stable/debian/key.gpg \
+  | sudo gpg --dearmor -o /usr/share/keyrings/easysys.gpg
+echo "deb [signed-by=/usr/share/keyrings/easysys.gpg] https://repo.easysys.io/easylog/stable/debian ./" \
+  | sudo tee /etc/apt/sources.list.d/easylog.list
+sudo apt update && sudo apt install easylog
+sudo systemctl enable --now easylog
+```
 
-# Fedora / RHEL / openSUSE
-sudo rpm -i easylog-*.x86_64.rpm        # or .aarch64.rpm
+```sh
+# Fedora / RHEL
+sudo tee /etc/yum.repos.d/easylog.repo >/dev/null <<'EOF'
+[easylog]
+name=EasyLog
+baseurl=https://repo.easysys.io/easylog/stable/redhat
+enabled=1
+gpgcheck=1
+gpgkey=https://repo.easysys.io/easylog/stable/redhat/key.gpg
+EOF
+sudo dnf install easylog
+sudo systemctl enable --now easylog
 
-# Start it (and enable on boot)
+# openSUSE / SLES — same repository
+sudo zypper addrepo -fg https://repo.easysys.io/easylog/stable/redhat easylog
+sudo zypper install easylog
+sudo systemctl enable --now easylog
+```
+
+### From a downloaded package
+
+For hosts without access to the repository, grab the `.deb` or `.rpm` for your
+architecture from the [latest release](https://github.com/easysysio/EasyLog/releases):
+
+```sh
+sudo dpkg -i easylog_*_amd64.deb        # Debian / Ubuntu (or _arm64.deb)
+sudo rpm -i easylog-*.x86_64.rpm        # Fedora / RHEL / openSUSE (or .aarch64.rpm)
 sudo systemctl enable --now easylog
 ```
 
