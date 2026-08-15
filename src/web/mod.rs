@@ -30,6 +30,7 @@ use crate::sources::{self, Source};
 use crate::state::{AppState, WebState};
 
 mod apache;
+mod geomap;
 mod nginx;
 mod traefik;
 
@@ -313,7 +314,10 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
     let mut last24: i64 = 0;
     let mut by_type: Vec<(String, i64)> = Vec::new();
     let mut by_ip: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-    let mut by_country: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    // Keyed by (ISO-2 code, display name) — the code shades the map, the name
+    // labels the pie. The code is empty for private/unknown addresses.
+    let mut by_country: std::collections::HashMap<(String, String), i64> =
+        std::collections::HashMap::new();
     let mut country_codes: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     {
@@ -357,12 +361,11 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
             })?;
             for row in crows {
                 let (country, code, c) = row?;
-                *by_country.entry(country).or_insert(0) += c;
-                if let Some(code) = code {
-                    if !code.is_empty() {
-                        country_codes.insert(code);
-                    }
+                let code = code.unwrap_or_default();
+                if !code.is_empty() {
+                    country_codes.insert(code.clone());
                 }
+                *by_country.entry((code, country)).or_insert(0) += c;
             }
         }
     }
@@ -375,9 +378,22 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
             .map(|(ip, c)| (sources.get(&ip).map(|s| s.name.clone()).unwrap_or(ip), c))
             .collect()
     };
+    // The overview map covers every log type at once. It's display-only: unlike
+    // the dashboards, the home page has no filter for a country to drill into.
+    let country_rows: Vec<geomap::CountryCount> = by_country
+        .iter()
+        .map(|((code, name), count)| geomap::CountryCount {
+            code: code.clone(),
+            name: name.clone(),
+            count: *count,
+        })
+        .collect();
+    let map = geomap::build(&country_rows, None);
+
     let (source_gradient, source_slices) = build_pie(by_source);
     let (type_gradient, type_slices) = build_pie(by_type);
-    let (country_gradient, country_slices) = build_pie(by_country.into_iter().collect());
+    let (country_gradient, country_slices) =
+        build_pie(by_country.into_iter().map(|((_, name), c)| (name, c)).collect());
 
     let mut ctx = tera::Context::new();
     ctx.insert("active", "home");
@@ -393,6 +409,7 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
     ctx.insert("type_slices", &type_slices);
     ctx.insert("country_gradient", &country_gradient);
     ctx.insert("country_slices", &country_slices);
+    ctx.insert("map", &map);
     ctx.insert("has_data", &(total > 0));
     Ok(Html(state.tera.render("index.html", &ctx)?))
 }

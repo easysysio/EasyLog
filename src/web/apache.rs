@@ -324,6 +324,13 @@ pub(crate) fn render(
         |label| filter.with_country(label).href(base),
     )?;
 
+    // World map, shaded from every country in the bounded set (not just the top
+    // 10); clicking a country applies the same filter as the panel above.
+    let country_rows = super::geomap::counts(&conn, table, &where_clause, &vals)?;
+    let map = super::geomap::build(&country_rows, Some(&|name: &str| {
+        filter.with_country(name).href(base)
+    }));
+
     // Time-range selector options.
     let range_defs = [("1h", "Hour"), ("24h", "24 h"), ("7d", "Week"), ("30d", "Month"), ("1y", "Year")];
     let range_options: Vec<RangeOpt> = range_defs
@@ -363,6 +370,7 @@ pub(crate) fn render(
     ctx.insert("top_urls", &top_urls);
     ctx.insert("top_ips", &top_ips);
     ctx.insert("top_countries", &top_countries);
+    ctx.insert("map", &map);
     ctx.insert("chips", &chips);
     ctx.insert("range_options", &range_options);
     ctx.insert("range_label", range_label(&range));

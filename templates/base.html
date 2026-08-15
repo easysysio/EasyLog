@@ -43,6 +43,29 @@
     /* Pie chart (CSS conic-gradient) + legend dot. */
     .pie { width:130px; height:130px; border-radius:50%; flex:0 0 auto; }
     .pie-dot { display:inline-block; width:10px; height:10px; border-radius:2px; flex:0 0 auto; }
+    /* World map choropleth: countries carry a .geo-l1..5 shading class from the
+       server (web/geomap.rs); everything else falls back to --geo-0. */
+    :root, [data-bs-theme="dark"] {
+      --geo-0:#2a3038; --geo-l1:#2a5a8f; --geo-l2:#3a79c0;
+      --geo-l3:#4f9cf9; --geo-l4:#7fbcff; --geo-l5:#b3d8ff;
+    }
+    [data-bs-theme="light"] {
+      --geo-0:#e4e8ee; --geo-l1:#bfd9ff; --geo-l2:#8fbcfd;
+      --geo-l3:#5c9bfd; --geo-l4:#2b7afc; --geo-l5:#0a4fb5;
+    }
+    .geo-map svg { display:block; width:100%; height:auto; }
+    .geo-map path { fill:var(--geo-0); stroke:var(--bs-body-bg);
+                    stroke-width:.5; vector-effect:non-scaling-stroke; }
+    .geo-map .geo-hit { cursor:pointer; }
+    .geo-map .geo-hit:hover path, .geo-map .geo-hit:focus-visible path {
+      stroke:var(--bs-body-color); stroke-width:1.2; }
+    .geo-map .geo-l1 { fill:var(--geo-l1); } .geo-map .geo-l2 { fill:var(--geo-l2); }
+    .geo-map .geo-l3 { fill:var(--geo-l3); } .geo-map .geo-l4 { fill:var(--geo-l4); }
+    .geo-map .geo-l5 { fill:var(--geo-l5); }
+    .geo-key { display:inline-block; width:22px; height:10px; border-radius:2px; }
+    .geo-key.geo-l1 { background:var(--geo-l1); } .geo-key.geo-l2 { background:var(--geo-l2); }
+    .geo-key.geo-l3 { background:var(--geo-l3); } .geo-key.geo-l4 { background:var(--geo-l4); }
+    .geo-key.geo-l5 { background:var(--geo-l5); }
   </style>
   {% block head %}{% endblock %}
 </head>

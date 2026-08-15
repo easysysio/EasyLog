@@ -42,6 +42,7 @@ fn load_templates() -> Result<Tera> {
     let mut tera = Tera::default();
     tera.add_raw_templates(vec![
         ("base.html", include_str!("../templates/base.html")),
+        ("_worldmap.html", include_str!("../templates/_worldmap.html")),
         ("index.html", include_str!("../templates/index.html")),
         ("sources.html", include_str!("../templates/sources.html")),
         ("apache.html", include_str!("../templates/apache.html")),

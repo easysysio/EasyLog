@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A **Countries** KPI and a **Top countries** panel (click a country to filter the
     whole dashboard to its traffic) on the Apache, Nginx, and Traefik dashboards.
   - A **Countries** KPI and a **Logs by country** pie on the Home overview.
+  - A **world map** on every dashboard and the overview, shaded by request volume
+    over five log-scaled steps so a single dominant country doesn't flatten the
+    rest. Hovering a country shows its request count; on the dashboards, clicking
+    one applies the same country filter as the Top-countries panel, composing with
+    the active time range and any other filters. The map is a Natural Earth
+    (public domain) SVG compiled into the binary and shaded server-side — no chart
+    library, no external requests.
   - Country lookups are fully offline. EasyLog **bundles the DB-IP Lite country
     database** (embedded in the binary — nothing to install), and you can point
     `geo_db_path` at an external MaxMind-format `.mmdb` (e.g. MaxMind GeoLite2) to

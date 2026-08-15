@@ -319,6 +319,13 @@ pub async fn dashboard(
         |l| filter.with_country(l).href(),
     )?;
 
+    // World map, shaded from every country in the bounded set (not just the top
+    // 10); clicking a country applies the same filter as the panel above.
+    let country_rows = super::geomap::counts(&conn, "traefik", &where_clause, &vals)?;
+    let map = super::geomap::build(&country_rows, Some(&|name: &str| {
+        filter.with_country(name).href()
+    }));
+
     // Time-range selector.
     let range_defs = [
         ("1h", "Hour"),
@@ -370,6 +377,7 @@ pub async fn dashboard(
     ctx.insert("top_routers", &top_routers);
     ctx.insert("top_services", &top_services);
     ctx.insert("top_countries", &top_countries);
+    ctx.insert("map", &map);
     ctx.insert("chips", &chips);
     ctx.insert("range_options", &range_options);
     ctx.insert("range_label", range_label(&range));

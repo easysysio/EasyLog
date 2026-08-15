@@ -31,9 +31,10 @@ parsed events in an embedded **DuckDB** column store, and serves a live
   URL, status code, or country to drill down** — filters stack and are shareable
   by URL.
 - 🌍 **IP geolocation, fully offline** — every client IP is resolved to a country
-  at ingest, powering a Countries KPI, Top-countries panels, and a country
-  breakdown on the overview. The **DB-IP Lite country database is bundled** in the
-  binary (nothing to install); point `geo_db_path` at a MaxMind `.mmdb` to override.
+  at ingest, powering a Countries KPI, Top-countries panels, a country breakdown
+  on the overview, and a **shaded world map** on every dashboard that you can
+  click to filter. The **DB-IP Lite country database is bundled** in the binary
+  (nothing to install); point `geo_db_path` at a MaxMind `.mmdb` to override.
 - 🎛️ **Web-managed sources** — map a sending host to a log type from the UI; no
   config edits or restarts required.
 - 🔒 **Authentication** — admin account created on first run; the web UI is
@@ -210,3 +211,11 @@ See [CHANGELOG.md](CHANGELOG.md) for released and in-progress changes.
 ## License
 
 Released under the [MIT License](LICENSE).
+
+### Bundled data
+
+- IP geolocation by [DB-IP](https://db-ip.com) — DB-IP Lite country database,
+  licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- Country boundaries from [Natural Earth](https://www.naturalearthdata.com/)
+  (public domain), simplified into `assets/geo/world.svg` by
+  [`tools/build-world-svg.py`](tools/build-world-svg.py).
