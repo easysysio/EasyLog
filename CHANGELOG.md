@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-15
+
 ### Added
 - **IP geolocation on every dashboard.** EasyLog now resolves each client IP to a
   country at ingest time and surfaces it across the UI:
