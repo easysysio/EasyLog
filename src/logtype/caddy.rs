@@ -176,10 +176,8 @@ impl LogType for Caddy {
         if j.status.is_none() && request.method.is_none() {
             return Ok(false);
         }
-        if let Some(msg) = j.msg.as_deref() {
-            if msg != "handled request" {
-                return Ok(false);
-            }
+        if j.msg.as_deref().is_some_and(|msg| msg != "handled request") {
+            return Ok(false);
         }
 
         let remote_host = client_ip(&request);
