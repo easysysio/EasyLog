@@ -55,6 +55,9 @@ pub struct FirewallEvent {
     /// Vendor message identity — an ASA message ID, a PAN-OS subtype — so a
     /// dashboard can distinguish "connection built" from "packet denied".
     pub event_type: String,
+    /// Layer-7 application, where the vendor identifies one (PAN-OS App-ID).
+    /// Empty for firewalls that only see ports.
+    pub application: String,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,6 +82,7 @@ pub fn init_schema(conn: &Connection, table: &str) -> Result<()> {
             rule         VARCHAR,
             bytes        BIGINT,
             event_type   VARCHAR,
+            application  VARCHAR,
             country      VARCHAR,
             country_code VARCHAR,
             received_at  TIMESTAMP,
@@ -107,9 +111,9 @@ pub fn insert(
         &format!(
             r#"INSERT INTO {table}
                (source_ip, ts, action, protocol, src_ip, src_port, dst_ip, dst_port,
-                src_zone, dst_zone, rule, bytes, event_type, country, country_code,
-                received_at, raw)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"#
+                src_zone, dst_zone, rule, bytes, event_type, application, country,
+                country_code, received_at, raw)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"#
         ),
         params![
             meta.source_ip,
@@ -125,6 +129,7 @@ pub fn insert(
             event.rule,
             event.bytes,
             event.event_type,
+            event.application,
             country,
             country_code,
             meta.received_at.naive_utc(),

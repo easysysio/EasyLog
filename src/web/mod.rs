@@ -37,6 +37,7 @@ mod firewall;
 mod geomap;
 mod haproxy;
 mod nginx;
+mod panos;
 mod proxy;
 mod traefik;
 
@@ -69,6 +70,7 @@ pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
         .route("/web/caddy", get(caddy::dashboard))
         .route("/web/haproxy", get(haproxy::dashboard))
         .route("/firewall/cisco_asa", get(cisco_asa::dashboard))
+        .route("/firewall/panos", get(panos::dashboard))
         .route("/apache", get(|uri: Uri| moved(uri, "/web/apache")))
         .route("/apache/recent", get(|uri: Uri| moved(uri, "/web/apache/recent")))
         .route("/nginx", get(|uri: Uri| moved(uri, "/web/nginx")))

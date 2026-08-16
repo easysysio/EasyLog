@@ -170,6 +170,7 @@ pub fn parse_event(body: &str, tag: Option<&str>) -> Option<FirewallEvent> {
                 rule: text(&c, "rule"),
                 bytes: None,
                 event_type: id,
+                application: String::new(),
             }
         }
         "106100" => {
@@ -187,6 +188,7 @@ pub fn parse_event(body: &str, tag: Option<&str>) -> Option<FirewallEvent> {
                 rule: text(&c, "rule"),
                 bytes: None,
                 event_type: id,
+                application: String::new(),
             }
         }
         "302013" | "302014" | "302015" | "302016" => {
@@ -205,6 +207,7 @@ pub fn parse_event(body: &str, tag: Option<&str>) -> Option<FirewallEvent> {
                 rule: String::new(),
                 bytes: c.name("bytes").and_then(|m| m.as_str().parse().ok()),
                 event_type: id,
+                application: String::new(),
             }
         }
         "106001" => {
@@ -222,6 +225,7 @@ pub fn parse_event(body: &str, tag: Option<&str>) -> Option<FirewallEvent> {
                 rule: String::new(),
                 bytes: None,
                 event_type: id,
+                application: String::new(),
             }
         }
         _ => return None,

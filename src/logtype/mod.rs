@@ -24,6 +24,7 @@ pub mod cisco_asa;
 pub mod firewall;
 pub mod haproxy;
 pub mod nginx;
+pub mod panos;
 pub mod traefik;
 
 // Envelope metadata extracted from the syslog layer, passed to every parser.
@@ -151,6 +152,8 @@ impl Registry {
         types.insert(haproxy.name(), Box::new(haproxy));
         let cisco_asa = cisco_asa::CiscoAsa;
         types.insert(cisco_asa.name(), Box::new(cisco_asa));
+        let panos = panos::PanOs;
+        types.insert(panos.name(), Box::new(panos));
         Registry { types }
     }
 
