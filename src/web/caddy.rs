@@ -1,10 +1,11 @@
 // =============================================================================
-// web/traefik.rs — Traefik dashboard (GET /web/traefik)
+// web/caddy.rs — Caddy dashboard (GET /web/caddy)
 //
-// Traefik logs requests with a duration, so the dashboard is the shared one in
-// web/proxy.rs; this module only describes what makes Traefik different: its
-// table, route, labelling, and the two routing dimensions it can be filtered by
-// (router and service).
+// Caddy's JSON access log carries a request duration, so it shares the renderer
+// in web/proxy.rs with Traefik. Caddy has no routing dimensions of its own —
+// requests are keyed by host and path — so the spec declares no extra panels
+// and the dashboard is KPIs, timeline, status codes, top URLs / IPs / countries
+// and the world map.
 // =============================================================================
 
 use std::sync::Arc;
@@ -15,26 +16,22 @@ use axum::{
 };
 
 use super::AppError;
-use super::proxy::{ExtraDim, Filter, Spec};
+use super::proxy::{Filter, Spec};
 use crate::state::AppState;
 
 const SPEC: Spec = Spec {
-    table: "traefik",
-    base: "/web/traefik",
+    table: "caddy",
+    base: "/web/caddy",
     category: "web",
-    label: "Traefik",
-    icon: "bi-diagram-3",
+    label: "Caddy",
+    icon: "bi-shield-check",
     badge: "JSON access log",
-    hint: "forward its JSON access log over syslog",
-    extra: &[
-        ExtraDim { key: "router", title: "Top routers", icon: "bi-signpost-2", chip: "Router" },
-        ExtraDim { key: "service", title: "Top services", icon: "bi-hdd-stack", chip: "Service" },
-    ],
+    hint: "enable `log { format json }` and forward its access log over syslog",
+    extra: &[],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /web/traefik  (?range= plus ?ip= ?path= ?status= ?router= ?service=
-// ?country= drill-down filters)
+// GET /web/caddy  (?range= plus ?ip= ?path= ?status= ?country= filters)
 // ─────────────────────────────────────────────────────────────────────────────
 pub async fn dashboard(
     State(state): State<Arc<AppState>>,

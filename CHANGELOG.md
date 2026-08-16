@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Caddy log type + dashboard.** Parses Caddy v2's JSON access log (`log {
+  format json }`), including the nested `request` object, seconds-based
+  `duration`, and the `client_ip` / `remote_ip` / `remote_addr` variations across
+  Caddy versions. Non-access entries sharing the log stream are ignored.
+
 ### Changed
 - **Dashboards are grouped by category.** The navigation is now two rows: the
   first selects a category (Web today; Firewalls and 3rd parties as those types

@@ -49,8 +49,8 @@ parsed events in an embedded **DuckDB** column store, and serves a live
   a systemd unit, built and published automatically on each tag.
 
 Supported log types: **Apache** (Common/Combined Log Format), **nginx**
-(combined access logs), and **Traefik** (JSON access logs), each with its own
-dashboard.
+(combined access logs), **Caddy** (JSON access logs) and **Traefik** (JSON
+access logs), each with its own dashboard.
 
 ## How it works
 
@@ -233,6 +233,7 @@ registry, so adding a type adds its entry automatically.
 | `GET /` | Home / overview |
 | `GET /web/apache` | Apache dashboard |
 | `GET /web/nginx` | Nginx dashboard |
+| `GET /web/caddy` | Caddy dashboard |
 | `GET /web/traefik` | Traefik dashboard |
 | `GET /sources` | Manage log sources |
 | `GET /health` | Liveness probe (`ok`) |

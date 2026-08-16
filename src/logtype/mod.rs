@@ -19,6 +19,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 
 pub mod apache;
+pub mod caddy;
 pub mod nginx;
 pub mod traefik;
 
@@ -137,6 +138,8 @@ impl Registry {
         types.insert(traefik.name(), Box::new(traefik));
         let nginx = nginx::Nginx;
         types.insert(nginx.name(), Box::new(nginx));
+        let caddy = caddy::Caddy;
+        types.insert(caddy.name(), Box::new(caddy));
         Registry { types }
     }
 

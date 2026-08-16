@@ -31,8 +31,10 @@ use crate::sources::{self, Source};
 use crate::state::{AppState, WebState};
 
 mod apache;
+mod caddy;
 mod geomap;
 mod nginx;
+mod proxy;
 mod traefik;
 
 // Web assets compiled into the binary so the UI is served with no static/
@@ -61,6 +63,7 @@ pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
         .route("/web/apache/recent", get(apache_recent))
         .route("/web/nginx", get(nginx::dashboard))
         .route("/web/traefik", get(traefik::dashboard))
+        .route("/web/caddy", get(caddy::dashboard))
         .route("/apache", get(|uri: Uri| moved(uri, "/web/apache")))
         .route("/apache/recent", get(|uri: Uri| moved(uri, "/web/apache/recent")))
         .route("/nginx", get(|uri: Uri| moved(uri, "/web/nginx")))

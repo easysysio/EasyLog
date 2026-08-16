@@ -1,19 +1,22 @@
-{# traefik.html — Traefik dashboard: KPIs (incl. duration), timeline, status,
-   and top paths / client IPs / routers / services (drill-down links). #}
+{# proxy.html — dashboard for request logs that carry a duration (Traefik,
+   Caddy, …): KPIs incl. avg/p95 duration, timeline, status codes, top paths /
+   client IPs / countries, the world map, plus whatever routing dimensions the
+   log type declares (see web/proxy.rs). Everything type-specific arrives in the
+   context: type_label, type_icon, badge, hint, base, extra_panels. #}
 {% extends "base.html" %}
-{% block title %}Traefik — EasyLog{% endblock %}
+{% block title %}{{ type_label }} — EasyLog{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
-  <h1 class="h3 mb-0"><i class="bi bi-diagram-3 me-2"></i>Traefik</h1>
-  <span class="badge text-bg-secondary">JSON access log</span>
+  <h1 class="h3 mb-0"><i class="bi {{ type_icon }} me-2"></i>{{ type_label }}</h1>
+  <span class="badge text-bg-secondary">{{ badge }}</span>
 </div>
 
 {% if not has_data %}
   <div class="card">
     <div class="card-body text-secondary text-center py-5">
       <i class="bi bi-inbox fs-2 d-block mb-2"></i>
-      No Traefik logs yet. Add a Traefik <a href="/sources">source</a> and forward
-      its JSON access log over syslog — parsed requests will appear here.
+      No {{ type_label }} logs yet. Add a {{ type_label }} <a href="/sources">source</a> and
+      {{ hint }} — parsed requests will appear here.
     </div>
   </div>
 {% else %}
@@ -35,7 +38,7 @@
     {{ c.label }} <i class="bi bi-x-lg ms-1"></i>
   </a>
   {% endfor %}
-  <a href="/traefik" class="small text-decoration-none ms-1">Clear all</a>
+  <a href="{{ base }}" class="small text-decoration-none ms-1">Clear all</a>
 </div>
 {% endif %}
 
@@ -166,10 +169,11 @@
       {% endfor %}
     </tbody></table>
   </div></div></div>
+  {% for p in extra_panels %}
   <div class="col-lg-6"><div class="card h-100"><div class="card-body">
-    <h6 class="section-title mb-3"><i class="bi bi-signpost-2 me-1"></i>Top routers <span class="text-secondary">(click to filter)</span></h6>
+    <h6 class="section-title mb-3"><i class="bi {{ p.icon }} me-1"></i>{{ p.title }} <span class="text-secondary">(click to filter)</span></h6>
     <table class="table table-sm table-hover align-middle mb-0"><tbody>
-      {% for r in top_routers %}
+      {% for r in p.bars %}
       <tr>
         <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
         <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
@@ -178,18 +182,7 @@
       {% endfor %}
     </tbody></table>
   </div></div></div>
-  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
-    <h6 class="section-title mb-3"><i class="bi bi-hdd-stack me-1"></i>Top services <span class="text-secondary">(click to filter)</span></h6>
-    <table class="table table-sm table-hover align-middle mb-0"><tbody>
-      {% for r in top_services %}
-      <tr>
-        <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
-        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
-        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
-      </tr>
-      {% endfor %}
-    </tbody></table>
-  </div></div></div>
+  {% endfor %}
   <div class="col-lg-6"><div class="card h-100"><div class="card-body">
     <h6 class="section-title mb-3"><i class="bi bi-globe2 me-1"></i>Top countries <span class="text-secondary">(click to filter)</span></h6>
     <table class="table table-sm table-hover align-middle mb-0"><tbody>
