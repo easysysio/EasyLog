@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **HAProxy log type + dashboard.** Parses `option httplog`, mapping the total
+  session timer (Tt) to the request duration and adding **Top backends** and
+  **Top servers** panels you can filter by. Aborted sessions (`-1` timers, no
+  status) are kept without inventing a negative duration; tcplog lines and
+  HAProxy's own notices are ignored.
 - **Caddy log type + dashboard.** Parses Caddy v2's JSON access log (`log {
   format json }`), including the nested `request` object, seconds-based
   `duration`, and the `client_ip` / `remote_ip` / `remote_addr` variations across

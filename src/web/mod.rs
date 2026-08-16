@@ -33,6 +33,7 @@ use crate::state::{AppState, WebState};
 mod apache;
 mod caddy;
 mod geomap;
+mod haproxy;
 mod nginx;
 mod proxy;
 mod traefik;
@@ -64,6 +65,7 @@ pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
         .route("/web/nginx", get(nginx::dashboard))
         .route("/web/traefik", get(traefik::dashboard))
         .route("/web/caddy", get(caddy::dashboard))
+        .route("/web/haproxy", get(haproxy::dashboard))
         .route("/apache", get(|uri: Uri| moved(uri, "/web/apache")))
         .route("/apache/recent", get(|uri: Uri| moved(uri, "/web/apache/recent")))
         .route("/nginx", get(|uri: Uri| moved(uri, "/web/nginx")))

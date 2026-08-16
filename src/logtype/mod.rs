@@ -20,6 +20,7 @@ use std::collections::HashMap;
 
 pub mod apache;
 pub mod caddy;
+pub mod haproxy;
 pub mod nginx;
 pub mod traefik;
 
@@ -140,6 +141,8 @@ impl Registry {
         types.insert(nginx.name(), Box::new(nginx));
         let caddy = caddy::Caddy;
         types.insert(caddy.name(), Box::new(caddy));
+        let haproxy = haproxy::HAProxy;
+        types.insert(haproxy.name(), Box::new(haproxy));
         Registry { types }
     }
 
