@@ -17,7 +17,7 @@ use duckdb::Connection;
 use tera::Tera;
 
 use crate::config::Config;
-use crate::logtype::Registry;
+use crate::logtype::{NavCategory, Registry};
 use crate::sources::{self, Source};
 
 // Process-wide shared state. The DuckDB connection is guarded by a std Mutex;
@@ -29,6 +29,10 @@ pub struct AppState {
     pub db: Mutex<Connection>,
     pub sources: RwLock<HashMap<String, Source>>,
     pub tera: Tera,
+    /// Navigation model derived from the registry at startup: categories and the
+    /// dashboards under them. The registry is fixed at compile time, so this is
+    /// built once and handed to every page.
+    pub nav: Vec<NavCategory>,
     /// Signing key for session cookies (persisted; see auth.rs).
     pub cookie_key: Key,
     /// True until the admin account is created (first-run setup).

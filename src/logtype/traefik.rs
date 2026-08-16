@@ -13,7 +13,7 @@ use chrono::NaiveDateTime;
 use duckdb::{Connection, params};
 use serde::Deserialize;
 
-use super::{LogType, Meta};
+use super::{Category, LogType, Meta};
 
 /// Traefik JSON-access-log handler (zero-sized).
 pub struct Traefik;
@@ -51,6 +51,18 @@ struct TraefikJson {
 impl LogType for Traefik {
     fn name(&self) -> &'static str {
         "traefik"
+    }
+
+    fn category(&self) -> Category {
+        Category::Web
+    }
+
+    fn label(&self) -> &'static str {
+        "Traefik"
+    }
+
+    fn icon(&self) -> &'static str {
+        "bi-diagram-3"
     }
 
     // ─────────────────────────────────────────────────────────────────────────

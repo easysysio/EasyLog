@@ -26,7 +26,10 @@
       <div class="col-md-3">
         <label class="form-label small text-secondary">Log type</label>
         <select name="log_type" class="form-select">
-          {% for t in log_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+          {# Grouped by category so the list stays navigable as formats are added. #}
+          {% for c in nav %}<optgroup label="{{ c.label }}">
+            {% for t in c.types %}<option value="{{ t.slug }}">{{ t.label }}</option>{% endfor %}
+          </optgroup>{% endfor %}
         </select>
       </div>
       <div class="col-md-2 d-grid">

@@ -16,7 +16,7 @@ use duckdb::{Connection, params};
 use regex::Regex;
 use std::sync::OnceLock;
 
-use super::{LogType, Meta};
+use super::{Category, LogType, Meta};
 
 /// Apache combined-log-format handler (zero-sized; holds no state).
 pub struct Apache;
@@ -96,6 +96,18 @@ pub fn parse_line(line: &str) -> Option<ApacheEntry> {
 impl LogType for Apache {
     fn name(&self) -> &'static str {
         "apache"
+    }
+
+    fn category(&self) -> Category {
+        Category::Web
+    }
+
+    fn label(&self) -> &'static str {
+        "Apache"
+    }
+
+    fn icon(&self) -> &'static str {
+        "bi-bar-chart"
     }
 
     // ─────────────────────────────────────────────────────────────────────────

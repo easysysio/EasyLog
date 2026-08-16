@@ -11,7 +11,7 @@ use anyhow::Result;
 use duckdb::{Connection, params};
 
 use super::apache::parse_line;
-use super::{LogType, Meta};
+use super::{Category, LogType, Meta};
 
 /// nginx access-log handler (zero-sized).
 pub struct Nginx;
@@ -19,6 +19,18 @@ pub struct Nginx;
 impl LogType for Nginx {
     fn name(&self) -> &'static str {
         "nginx"
+    }
+
+    fn category(&self) -> Category {
+        Category::Web
+    }
+
+    fn label(&self) -> &'static str {
+        "Nginx"
+    }
+
+    fn icon(&self) -> &'static str {
+        "bi-hdd-rack"
     }
 
     // ─────────────────────────────────────────────────────────────────────────

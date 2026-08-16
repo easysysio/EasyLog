@@ -16,6 +16,7 @@ use chrono::{Datelike, Duration, NaiveDate, Timelike, Utc};
 use axum::{
     Form, Json, Router,
     extract::{Path, Request, State},
+    http::Uri,
     http::{StatusCode, header},
     middleware::{self, Next},
     response::{Html, IntoResponse, Redirect, Response},
@@ -49,15 +50,21 @@ const FAVICON: &[u8] = include_bytes!("../../static/favicon.svg");
 pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
     let port = state.config.web_port;
 
-    // Routes that require an authenticated session.
+    // Routes that require an authenticated session. Dashboards live under their
+    // navigation category (/web/apache, later /firewall/…); the old flat paths
+    // redirect so existing bookmarks and shared filter links keep working.
     let protected = Router::new()
         .route("/", get(home))
         .route("/sources", get(sources_page).post(add_source))
         .route("/sources/delete", post(delete_source))
-        .route("/apache", get(apache::dashboard))
-        .route("/apache/recent", get(apache_recent))
-        .route("/nginx", get(nginx::dashboard))
-        .route("/traefik", get(traefik::dashboard))
+        .route("/web/apache", get(apache::dashboard))
+        .route("/web/apache/recent", get(apache_recent))
+        .route("/web/nginx", get(nginx::dashboard))
+        .route("/web/traefik", get(traefik::dashboard))
+        .route("/apache", get(|uri: Uri| moved(uri, "/web/apache")))
+        .route("/apache/recent", get(|uri: Uri| moved(uri, "/web/apache/recent")))
+        .route("/nginx", get(|uri: Uri| moved(uri, "/web/nginx")))
+        .route("/traefik", get(|uri: Uri| moved(uri, "/web/traefik")))
         .route_layer(middleware::from_fn_with_state(
             WebState(state.clone()),
             require_auth,
@@ -88,6 +95,15 @@ pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
 // ─────────────────────────────────────────────────────────────────────────────
 async fn health() -> &'static str {
     "ok"
+}
+
+// Permanent redirect from a dashboard's old flat path to its category-scoped
+// one, carrying the query string over so drill-down filters survive the move.
+async fn moved(uri: Uri, target: &'static str) -> Redirect {
+    match uri.query() {
+        Some(q) if !q.is_empty() => Redirect::permanent(&format!("{target}?{q}")),
+        _ => Redirect::permanent(target),
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -397,6 +413,8 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
 
     let mut ctx = tera::Context::new();
     ctx.insert("active", "home");
+    ctx.insert("active_category", "");
+    ctx.insert("nav", &state.nav);
     ctx.insert("source_count", &state.sources.read().expect("sources lock poisoned").len());
     ctx.insert("log_types", &state.registry.names());
     ctx.insert("total_logs", &total);
@@ -545,6 +563,8 @@ fn render_sources(state: &Arc<AppState>, error: Option<String>) -> Result<Html<S
 
     let mut ctx = tera::Context::new();
     ctx.insert("active", "sources");
+    ctx.insert("active_category", "");
+    ctx.insert("nav", &state.nav);
     ctx.insert("sources", &list);
     ctx.insert("log_types", &state.registry.names());
     if let Some(e) = error {

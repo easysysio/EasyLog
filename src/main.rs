@@ -116,9 +116,11 @@ async fn main() -> Result<()> {
         source_map.len(),
     );
 
+    let nav = registry.nav();
     let state = Arc::new(AppState {
         config,
         registry,
+        nav,
         db: Mutex::new(conn),
         sources: RwLock::new(source_map),
         tera,

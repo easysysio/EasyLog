@@ -24,5 +24,5 @@ pub async fn dashboard(
     State(state): State<Arc<AppState>>,
     Query(filter): Query<Filter>,
 ) -> Result<Html<String>, AppError> {
-    render(&state, filter, "nginx", "/nginx", "Nginx", "apache.html")
+    render(&state, filter, "nginx", "/web/nginx", "Nginx", "apache.html")
 }

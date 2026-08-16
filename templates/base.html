@@ -39,6 +39,16 @@
     .tl-xaxis .xl { flex:1; text-align:center; font-size:.7rem;
                     color:var(--bs-secondary-color); white-space:nowrap; overflow:hidden; }
     .truncate { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:0; }
+    /* Second navigation row: the dashboards of the expanded category. Scrolls
+       sideways rather than wrapping, so many vendors stay usable on a phone. */
+    .nav-category { background:none; border:0; }
+    .subnav { background:var(--bs-tertiary-bg); }
+    .subnav .container { overflow-x:auto; white-space:nowrap; padding-top:.4rem; padding-bottom:.4rem; }
+    .subnav-link { display:inline-flex; align-items:center; padding:.3rem .8rem; margin-right:.25rem;
+                   border-radius:999px; font-size:.875rem; text-decoration:none;
+                   color:var(--bs-secondary-color); }
+    .subnav-link:hover { background:var(--bs-secondary-bg); color:var(--bs-body-color); }
+    .subnav-link.active { background:var(--bs-primary); color:#fff; }
     td .progress { min-width:80px; }
     /* Pie chart (CSS conic-gradient) + legend dot. */
     .pie { width:130px; height:130px; border-radius:50%; flex:0 0 auto; }
@@ -70,7 +80,7 @@
   {% block head %}{% endblock %}
 </head>
 <body>
-  <nav class="navbar navbar-expand-md border-bottom mb-4">
+  <nav class="navbar navbar-expand-md border-bottom">
     <div class="container">
       <a class="navbar-brand" href="/">
         <i class="bi bi-stack brand-mark me-1"></i>Easy<span class="brand-mark">Log</span>
@@ -86,18 +96,18 @@
             <a class="nav-link {% if active == 'home' %}active{% endif %}" href="/">
               <i class="bi bi-house-door me-1"></i>Home</a>
           </li>
+          {# Category tabs: clicking one reveals its dashboards in the row below
+             rather than navigating. Built from the registry (see Registry::nav),
+             so a new log type never means editing this file. #}
+          {% for c in nav | default(value=[]) %}
           <li class="nav-item">
-            <a class="nav-link {% if active == 'apache' %}active{% endif %}" href="/apache">
-              <i class="bi bi-bar-chart me-1"></i>Apache</a>
+            <button type="button" class="nav-link nav-category {% if active_category == c.slug %}active{% endif %}"
+                    data-category="{{ c.slug }}" aria-controls="navcat-{{ c.slug }}"
+                    aria-expanded="{% if active_category == c.slug %}true{% else %}false{% endif %}">
+              <i class="bi {{ c.icon }} me-1"></i>{{ c.label }}
+            </button>
           </li>
-          <li class="nav-item">
-            <a class="nav-link {% if active == 'nginx' %}active{% endif %}" href="/nginx">
-              <i class="bi bi-hdd-rack me-1"></i>Nginx</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {% if active == 'traefik' %}active{% endif %}" href="/traefik">
-              <i class="bi bi-diagram-3 me-1"></i>Traefik</a>
-          </li>
+          {% endfor %}
           <li class="nav-item">
             <a class="nav-link {% if active == 'sources' %}active{% endif %}" href="/sources">
               <i class="bi bi-hdd-network me-1"></i>Sources</a>
@@ -118,7 +128,21 @@
       </div>
     </div>
   </nav>
-  <main class="container pb-5">
+  {# Second row: the dashboards of the expanded category. Only one row is shown
+     at a time; the whole strip is hidden when no category is expanded. #}
+  <div id="subnav" class="subnav border-bottom {% if not active_category %}d-none{% endif %}">
+    <div class="container">
+      {% for c in nav | default(value=[]) %}
+      <div class="subnav-row {% if active_category != c.slug %}d-none{% endif %}" id="navcat-{{ c.slug }}">
+        {% for t in c.types %}
+        <a class="subnav-link {% if active == t.slug %}active{% endif %}" href="{{ t.href }}">
+          <i class="bi {{ t.icon }} me-1"></i>{{ t.label }}</a>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <main class="container pt-4 pb-5">
     {% block content %}{% endblock %}
   </main>
   <div class="position-fixed bottom-0 end-0 m-2 small text-secondary user-select-none"
@@ -127,6 +151,33 @@
   </div>
   <script src="/static/bootstrap.bundle.min.js"></script>
   <script>
+  (function () {
+    // Category tabs expand their dashboard row instead of navigating; clicking
+    // the open one closes it. Only one row is ever visible.
+    var strip = document.getElementById('subnav');
+    var tabs = document.querySelectorAll('.nav-category');
+    tabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        var open = tab.getAttribute('aria-expanded') === 'true';
+        tabs.forEach(function (t) {
+          t.classList.remove('active');
+          t.setAttribute('aria-expanded', 'false');
+        });
+        document.querySelectorAll('.subnav-row').forEach(function (r) {
+          r.classList.add('d-none');
+        });
+        if (open) {
+          strip.classList.add('d-none');
+          return;
+        }
+        tab.classList.add('active');
+        tab.setAttribute('aria-expanded', 'true');
+        var row = document.getElementById(tab.dataset.category ? 'navcat-' + tab.dataset.category : '');
+        if (row) { row.classList.remove('d-none'); }
+        strip.classList.remove('d-none');
+      });
+    });
+  })();
   (function () {
     // Render timeline labels/tooltips in the browser's local timezone. The
     // server sends each bucket's UTC epoch (data-ts) and a granularity hint.

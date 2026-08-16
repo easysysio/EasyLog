@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Dashboards are grouped by category.** The navigation is now two rows: the
+  first selects a category (Web today; Firewalls and 3rd parties as those types
+  land), the second lists that category's dashboards. Both are built from the
+  log-type registry — a new format brings its own navigation entry, with no
+  template edits — and the source dropdown groups the same way.
+- **Dashboard URLs moved under their category**: `/web/apache`, `/web/nginx`,
+  `/web/traefik` (and `/web/apache/recent`). The old flat paths redirect
+  permanently, carrying the query string, so bookmarked and shared filter links
+  keep working.
+
 ## [0.4.1] — 2026-08-16
 
 ### Added

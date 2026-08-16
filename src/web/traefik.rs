@@ -58,8 +58,8 @@ impl Filter {
 
     fn href(&self) -> String {
         match serde_urlencoded::to_string(self) {
-            Ok(q) if !q.is_empty() => format!("/traefik?{q}"),
-            _ => "/traefik".to_string(),
+            Ok(q) if !q.is_empty() => format!("/web/traefik?{q}"),
+            _ => "/web/traefik".to_string(),
         }
     }
 
@@ -366,6 +366,8 @@ pub async fn dashboard(
 
     let mut ctx = tera::Context::new();
     ctx.insert("active", "traefik");
+    ctx.insert("active_category", "web");
+    ctx.insert("nav", &state.nav);
     ctx.insert("kpis", &kpis);
     ctx.insert("timeline", &timeline);
     ctx.insert("timeline_max", &timeline_max);

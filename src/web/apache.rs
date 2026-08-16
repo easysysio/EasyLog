@@ -202,7 +202,7 @@ pub async fn dashboard(
     State(state): State<Arc<AppState>>,
     Query(filter): Query<Filter>,
 ) -> Result<Html<String>, AppError> {
-    render(&state, filter, "apache", "/apache", "Apache", "apache.html")
+    render(&state, filter, "apache", "/web/apache", "Apache", "apache.html")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -359,6 +359,8 @@ pub(crate) fn render(
 
     let mut ctx = tera::Context::new();
     ctx.insert("active", table);
+    ctx.insert("active_category", "web");
+    ctx.insert("nav", &state.nav);
     ctx.insert("type_label", type_label);
     ctx.insert("base", base);
     ctx.insert("kpis", &kpis);

@@ -218,18 +218,29 @@ source at `http://<host>:3000/sources` — EasyLog routes incoming logs by sourc
 
 ### 3. View the dashboard
 
-Open `http://<host>:3000/apache` for live metrics: requests over time,
+Open `http://<host>:3000/web/apache` for live metrics: requests over time,
 status-code breakdown, and top URLs / client IPs.
+
+Dashboards are grouped by category in the navigation: the first row selects a
+category (Web, and Firewalls / 3rd parties as those types arrive), the second
+lists that category's dashboards. Both rows are built from the log-type
+registry, so adding a type adds its entry automatically.
 
 ### Endpoints
 
 | Route | Description |
 |-------|-------------|
 | `GET /` | Home / overview |
-| `GET /apache` | Apache dashboard |
+| `GET /web/apache` | Apache dashboard |
+| `GET /web/nginx` | Nginx dashboard |
+| `GET /web/traefik` | Traefik dashboard |
 | `GET /sources` | Manage log sources |
 | `GET /health` | Liveness probe (`ok`) |
-| `GET /apache/recent` | Recent parsed Apache rows (JSON) |
+| `GET /web/apache/recent` | Recent parsed Apache rows (JSON) |
+
+The pre-0.4.2 flat paths (`/apache`, `/nginx`, `/traefik`) permanently redirect
+to their category-scoped equivalents, query string included, so bookmarked and
+shared filter links keep working.
 
 ## Development
 
