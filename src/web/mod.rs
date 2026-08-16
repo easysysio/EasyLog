@@ -346,53 +346,68 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
         std::collections::HashMap::new();
     let mut country_codes: std::collections::HashSet<String> = std::collections::HashSet::new();
 
+    // Every log type's table has source_ip, ts, country and country_code, so the
+    // overview reads them as one union rather than querying each table
+    // separately: three scans total instead of four per registered type, which
+    // matters as vendors are added.
+    let union_sql = state
+        .registry
+        .names()
+        .iter()
+        .map(|name| {
+            format!("SELECT '{name}' AS log_type, source_ip, ts, country, country_code FROM {name}")
+        })
+        .collect::<Vec<_>>()
+        .join(" UNION ALL ");
+
     {
         let conn = state.db.lock().expect("db mutex poisoned");
-        // Each registered log type's table is named after the type.
+
+        // Totals and the last-24h count, per type, in one pass.
+        let mut s = conn.prepare(&format!(
+            "SELECT log_type, count(*), count(*) FILTER (WHERE ts >= CAST(? AS TIMESTAMP)) \
+             FROM ({union_sql}) GROUP BY log_type"
+        ))?;
+        let rows = s.query_map(duckdb::params![cutoff], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?))
+        })?;
+        for row in rows {
+            let (name, count, recent) = row?;
+            total += count;
+            last24 += recent;
+            by_type.push((name, count));
+        }
+        // Registered types with no rows yet still belong in the legend.
         for name in state.registry.names() {
-            let t: i64 = {
-                let mut s = conn.prepare(&format!("SELECT count(*) FROM {name}"))?;
-                let mut r = s.query_map([], |row| row.get(0))?;
-                r.next().transpose()?.unwrap_or(0)
-            };
-            let l: i64 = {
-                let mut s = conn
-                    .prepare(&format!("SELECT count(*) FROM {name} WHERE ts >= CAST(? AS TIMESTAMP)"))?;
-                let mut r = s.query_map(duckdb::params![cutoff], |row| row.get(0))?;
-                r.next().transpose()?.unwrap_or(0)
-            };
-            total += t;
-            last24 += l;
-            by_type.push((name.to_string(), t));
-
-            let mut s = conn.prepare(&format!("SELECT source_ip, count(*) FROM {name} GROUP BY source_ip"))?;
-            let rows = s.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
-            for row in rows {
-                let (ip, c) = row?;
-                *by_ip.entry(ip).or_insert(0) += c;
+            if !by_type.iter().any(|(t, _)| t == name) {
+                by_type.push((name.to_string(), 0));
             }
+        }
 
-            // Requests by country (across all types) for the overview pie, plus
-            // the set of distinct real country codes for the "Countries" KPI.
-            let mut sc = conn.prepare(&format!(
-                "SELECT coalesce(nullif(country, ''), 'Unknown'), country_code, count(*) FROM {name} \
-                 GROUP BY 1, 2"
-            ))?;
-            let crows = sc.query_map([], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, Option<String>>(1)?,
-                    row.get::<_, i64>(2)?,
-                ))
-            })?;
-            for row in crows {
-                let (country, code, c) = row?;
-                let code = code.unwrap_or_default();
-                if !code.is_empty() {
-                    country_codes.insert(code.clone());
-                }
-                *by_country.entry((code, country)).or_insert(0) += c;
+        let mut s = conn.prepare(&format!(
+            "SELECT source_ip, count(*) FROM ({union_sql}) GROUP BY source_ip"
+        ))?;
+        let rows = s.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
+        for row in rows {
+            let (ip, c) = row?;
+            *by_ip.entry(ip).or_insert(0) += c;
+        }
+
+        // Events by country (across all types) for the overview pie and map, plus
+        // the set of distinct real country codes for the "Countries" KPI.
+        let mut s = conn.prepare(&format!(
+            "SELECT coalesce(nullif(country, ''), 'Unknown'), coalesce(country_code, ''), count(*) \
+             FROM ({union_sql}) GROUP BY 1, 2"
+        ))?;
+        let rows = s.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?))
+        })?;
+        for row in rows {
+            let (country, code, c) = row?;
+            if !code.is_empty() {
+                country_codes.insert(code.clone());
             }
+            *by_country.entry((code, country)).or_insert(0) += c;
         }
     }
 

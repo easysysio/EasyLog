@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Firewall log types, in a new Firewalls category.** **Cisco ASA** (the
+  connection and access-decision message IDs: 106023, 106100, 106001 and the
+  302013/14/15/16 pairs) and **Palo Alto / PAN-OS** (TRAFFIC records, with
+  App-ID and security-rule panels). Both feed a dashboard built for firewall
+  questions rather than web ones: deny rate and denied counts as headline KPIs,
+  an allow/deny split, top sources, destinations, destination ports and rules,
+  and the world map keyed on the **source** address — where traffic came from.
 - **HAProxy log type + dashboard.** Parses `option httplog`, mapping the total
   session timer (Tt) to the request duration and adding **Top backends** and
   **Top servers** panels you can filter by. Aborted sessions (`-1` timers, no
@@ -24,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   land), the second lists that category's dashboards. Both are built from the
   log-type registry — a new format brings its own navigation entry, with no
   template edits — and the source dropdown groups the same way.
+- **The overview reads every log type in three queries** instead of four per
+  type, by unioning the tables rather than visiting each in turn — the page cost
+  no longer grows with the number of supported formats.
 - **Dashboard URLs moved under their category**: `/web/apache`, `/web/nginx`,
   `/web/traefik` (and `/web/apache/recent`). The old flat paths redirect
   permanently, carrying the query string, so bookmarked and shared filter links

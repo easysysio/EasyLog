@@ -48,9 +48,15 @@ parsed events in an embedded **DuckDB** column store, and serves a live
 - 📦 **First-class packaging** — `.deb` and `.rpm` for **x86_64 and arm64**, with
   a systemd unit, built and published automatically on each tag.
 
-Supported log types: **Apache** (Common/Combined Log Format), **nginx**
-(combined access logs), **Caddy** (JSON access logs), **HAProxy** (`option
-httplog`) and **Traefik** (JSON access logs), each with its own dashboard.
+Supported log types:
+
+* **Web** — **Apache** (Common/Combined Log Format), **nginx** (combined access
+  logs), **Caddy** (JSON access logs), **HAProxy** (`option httplog`) and
+  **Traefik** (JSON access logs).
+* **Firewalls** — **Cisco ASA** (syslog message IDs) and **Palo Alto / PAN-OS**
+  (TRAFFIC logs), on a dashboard built around the allow/deny split.
+
+Each type has its own dashboard, grouped by category in the navigation.
 
 ## How it works
 
@@ -236,6 +242,8 @@ registry, so adding a type adds its entry automatically.
 | `GET /web/caddy` | Caddy dashboard |
 | `GET /web/haproxy` | HAProxy dashboard |
 | `GET /web/traefik` | Traefik dashboard |
+| `GET /firewall/cisco_asa` | Cisco ASA dashboard |
+| `GET /firewall/panos` | Palo Alto dashboard |
 | `GET /sources` | Manage log sources |
 | `GET /health` | Liveness probe (`ok`) |
 | `GET /web/apache/recent` | Recent parsed Apache rows (JSON) |
