@@ -120,7 +120,10 @@ fn text(caps: &regex::Captures, name: &str) -> String {
 // ─────────────────────────────────────────────────────────────────────────────
 // parse_line(line)
 // Parses a full ASA message — one that still carries its "%ASA-x-nnnnnn:" tag.
+// Ingestion goes through parse_event, which also accepts the ID from the syslog
+// envelope; this is the whole-line form, used by the tests.
 // ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
 pub fn parse_line(line: &str) -> Option<FirewallEvent> {
     parse_event(line, None)
 }

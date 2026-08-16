@@ -74,7 +74,7 @@ fn split_csv(line: &str) -> Vec<String> {
     fields
 }
 
-fn field<'a>(fields: &'a [String], index: usize) -> &'a str {
+fn field(fields: &[String], index: usize) -> &str {
     fields.get(index).map(|s| s.trim()).unwrap_or("")
 }
 
