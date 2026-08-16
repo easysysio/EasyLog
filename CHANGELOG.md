@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-16
+
 ### Added
 - **Firewall log types, in a new Firewalls category.** **Cisco ASA** (the
   connection and access-decision message IDs: 106023, 106100, 106001 and the
@@ -27,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Dashboards are grouped by category.** The navigation is now two rows: the
-  first selects a category (Web today; Firewalls and 3rd parties as those types
+  first selects a category (Web and Firewalls today; 3rd parties when those types
   land), the second lists that category's dashboards. Both are built from the
   log-type registry — a new format brings its own navigation entry, with no
   template edits — and the source dropdown groups the same way.
@@ -35,7 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type, by unioning the tables rather than visiting each in turn — the page cost
   no longer grows with the number of supported formats.
 - **Dashboard URLs moved under their category**: `/web/apache`, `/web/nginx`,
-  `/web/traefik` (and `/web/apache/recent`). The old flat paths redirect
+  `/web/traefik` (and `/web/apache/recent`), with the new types at `/web/caddy`,
+  `/web/haproxy`, `/firewall/cisco_asa` and `/firewall/panos`. The old flat paths redirect
   permanently, carrying the query string, so bookmarked and shared filter links
   keep working.
 
