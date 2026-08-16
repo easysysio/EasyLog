@@ -39,6 +39,15 @@ pub struct Config {
     /// GeoLite2 DB). Empty uses the bundled DB-IP Lite country database.
     #[serde(default)]
     pub geo_db_path: String,
+    /// Delete events older than this many days, keeping the database bounded.
+    /// 0 (the default) keeps everything.
+    #[serde(default)]
+    pub retention_days: u32,
+    /// Rewrite the database at startup when pruning has left a large share of
+    /// the file as dead space — DuckDB reuses freed blocks but never shrinks the
+    /// file on its own. Only runs before ingestion starts.
+    #[serde(default = "default_auto_compact")]
+    pub auto_compact: bool,
 }
 
 fn default_bind() -> String {
@@ -59,6 +68,9 @@ fn default_duckdb_memory_limit() -> String {
 fn default_duckdb_threads() -> u16 {
     2
 }
+fn default_auto_compact() -> bool {
+    true
+}
 
 impl Default for Config {
     fn default() -> Self {
@@ -70,6 +82,8 @@ impl Default for Config {
             duckdb_memory_limit: default_duckdb_memory_limit(),
             duckdb_threads: default_duckdb_threads(),
             geo_db_path: String::new(),
+            retention_days: 0,
+            auto_compact: default_auto_compact(),
         }
     }
 }

@@ -26,5 +26,16 @@ duckdb_threads = 2
 # MaxMind-format .mmdb to override; leave empty to use the bundled database.
 geo_db_path = ""
 
+# Data retention: delete events older than this many days, so a long-running
+# collector doesn't fill its disk. 0 (the default) keeps everything forever.
+# Pruning runs at startup and hourly, across every log type.
+retention_days = 0
+
+# Reclaim disk after pruning. DuckDB reuses the space freed by deleted rows but
+# never shrinks the file, so EasyLog rewrites the database at startup when a
+# large share of it is dead space. Runs before ingestion starts; set false to
+# disable (the database then keeps its high-water mark).
+auto_compact = true
+
 # Log sources (which sending host maps to which log type) are managed in the
 # database via the web UI at http://<host>:<web_port>/sources — not here.

@@ -403,6 +403,14 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
     ctx.insert("last24", &last24);
     ctx.insert("avg_per_min", &format!("{:.2}", last24 as f64 / 1440.0));
     ctx.insert("country_count", &country_codes.len());
+    // Storage: what the database occupies on disk, and the retention window
+    // that bounds it (DuckDB reuses freed space but never shrinks the file, so
+    // this is a high-water mark between compactions).
+    ctx.insert(
+        "db_size",
+        &apache::human_bytes(crate::retention::database_size_bytes(&state.config.db_path) as i64),
+    );
+    ctx.insert("retention_days", &state.config.retention_days);
     ctx.insert("source_gradient", &source_gradient);
     ctx.insert("source_slices", &source_slices);
     ctx.insert("type_gradient", &type_gradient);

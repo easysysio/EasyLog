@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Data retention.** A new `retention_days` setting deletes events older than
+  the window from every log type, at startup and hourly thereafter, so a
+  long-running collector stays within bounds. Defaults to `0` — keep everything
+  — so existing installs are unchanged until you opt in. Events are aged by
+  their timestamp, falling back to when EasyLog received them, so lines with an
+  unparsable timestamp are pruned too.
+- **Database compaction.** DuckDB reuses the space freed by deleted rows but
+  never shrinks its file, so pruning alone bounds growth without returning disk
+  to the OS. With `auto_compact` (default `true`), EasyLog rewrites the database
+  at startup when a significant share of the file is dead space — before
+  ingestion begins, keeping the original until the new file is in place, so an
+  interrupted compaction leaves the database untouched.
+- **Storage KPI** on the overview: database size on disk and the active
+  retention window.
+
 ### Changed
 - **The bundled geolocation database is now refreshed at release time.** DB-IP
   republishes DB-IP Lite monthly, so the release workflow downloads the current

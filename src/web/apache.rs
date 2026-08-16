@@ -443,7 +443,7 @@ fn status_class(klass: i32) -> String {
 }
 
 // Formats a byte count as a human-readable string (B/KB/MB/GB/TB).
-fn human_bytes(n: i64) -> String {
+pub(super) fn human_bytes(n: i64) -> String {
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
     let mut v = n as f64;
     let mut i = 0;

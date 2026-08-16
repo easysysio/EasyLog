@@ -37,6 +37,9 @@ parsed events in an embedded **DuckDB** column store, and serves a live
   (nothing to install); point `geo_db_path` at a MaxMind `.mmdb` to override.
 - 🎛️ **Web-managed sources** — map a sending host to a log type from the UI; no
   config edits or restarts required.
+- 🧹 **Retention & compaction** — optionally delete events older than
+  `retention_days` and reclaim the freed disk by rewriting the database at
+  startup, so a long-running collector stays within bounds.
 - 🔒 **Authentication** — admin account created on first run; the web UI is
   login-protected (bcrypt, signed-cookie sessions). Syslog ingestion stays open.
 - 🪶 **Single self-contained binary** — the web templates and static assets
@@ -158,10 +161,29 @@ syslog_port = 514         # standard syslog; use 5514 to run without privileges
 web_port    = 3000        # web UI / dashboards
 db_path     = "easylog.duckdb"
 geo_db_path = ""          # external MaxMind .mmdb; empty = bundled DB-IP Lite
+
+retention_days = 0        # delete events older than N days; 0 = keep everything
+auto_compact   = true     # rewrite the database at startup to reclaim disk
 ```
 
 Log sources are **not** configured here — they're managed in the database via the
 web UI (see below).
+
+### Retention
+
+By default EasyLog keeps everything. Set `retention_days` to bound the database:
+events older than the window are deleted at startup and hourly thereafter,
+across every log type. Rows are aged by their event timestamp, falling back to
+when EasyLog received them, so a line whose timestamp couldn't be parsed is
+still subject to retention.
+
+Pruning alone bounds growth without returning disk to the OS — DuckDB reuses the
+space freed by deleted rows but never shrinks the file. `auto_compact` (on by
+default) closes that gap: at startup, if a large share of the file is dead
+space, EasyLog rewrites the database into a fresh file and swaps it in. It only
+runs before ingestion starts, and the original is kept until the new file is in
+place, so an interrupted compaction leaves the database untouched. The
+**Storage** card on the overview shows the current size and the active window.
 
 ## Usage
 

@@ -13,6 +13,7 @@ mod auth;
 mod config;
 mod geo;
 mod logtype;
+mod retention;
 mod sources;
 mod state;
 mod storage;
@@ -86,6 +87,14 @@ async fn main() -> Result<()> {
     let registry = Registry::with_defaults();
     let conn = storage::open(&config.db_path, &config.duckdb_memory_limit, config.duckdb_threads)?;
     registry.init_all(&conn)?;
+
+    // Apply retention and reclaim disk before anything can write: pruning here
+    // means a restart always enforces the configured window, and compaction is
+    // only safe while there are no concurrent writers.
+    if let Err(e) = retention::prune(&conn, &registry, config.retention_days) {
+        tracing::warn!("retention: startup prune failed: {e:#}");
+    }
+    let conn = retention::compact_if_needed(conn, &config)?;
     sources::init_schema(&conn)?;
     let source_map: HashMap<String, sources::Source> = sources::load_map(&conn)?;
 
@@ -117,9 +126,13 @@ async fn main() -> Result<()> {
         needs_setup: AtomicBool::new(needs_setup),
     });
 
-    // Run syslog ingestion and the web server concurrently; if either fails,
-    // propagate the error and shut down.
-    tokio::try_join!(syslog::serve(state.clone()), web::serve(state.clone()))?;
+    // Run syslog ingestion, the web server and the retention sweep concurrently;
+    // if any of them fails, propagate the error and shut down.
+    tokio::try_join!(
+        syslog::serve(state.clone()),
+        web::serve(state.clone()),
+        retention::serve(state.clone())
+    )?;
 
     Ok(())
 }

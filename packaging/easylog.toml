@@ -30,3 +30,14 @@ duckdb_threads = 2
 # Set this to an external MaxMind-format .mmdb (e.g. a MaxMind GeoLite2 file) to
 # override the bundled data; leave empty to use the bundled database.
 geo_db_path = ""
+
+# Data retention: delete events older than this many days, so a long-running
+# collector doesn't fill /var/lib. 0 (the default) keeps everything forever.
+# Pruning runs at startup and hourly, across every log type.
+retention_days = 0
+
+# Reclaim disk after pruning. DuckDB reuses the space freed by deleted rows but
+# never shrinks the file, so EasyLog rewrites the database at startup when a
+# large share of it is dead space. Runs before ingestion starts; set false to
+# disable (the database then keeps its high-water mark).
+auto_compact = true
