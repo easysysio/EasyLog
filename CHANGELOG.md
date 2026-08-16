@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-08-16
+
 ### Added
 - **Data retention.** A new `retention_days` setting deletes events older than
   the window from every log type, at startup and hourly thereafter, so a
