@@ -243,6 +243,7 @@ fn enqueue(state: &Arc<AppState>, tx: &mpsc::Sender<WorkItem>, ip: IpAddr, line:
     let meta = Meta {
         source_ip: ip_str,
         hostname,
+        tag: msg.appname.map(|a| a.to_string()),
         received_at: Utc::now(),
     };
 

@@ -228,6 +228,7 @@ mod tests {
         Meta {
             source_ip: "192.168.1.20".into(),
             hostname: None,
+            tag: None,
             received_at: Utc::now(),
         }
     }

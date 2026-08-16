@@ -48,6 +48,7 @@ fn load_templates() -> Result<Tera> {
         ("sources.html", include_str!("../templates/sources.html")),
         ("apache.html", include_str!("../templates/apache.html")),
         ("proxy.html", include_str!("../templates/proxy.html")),
+        ("firewall.html", include_str!("../templates/firewall.html")),
         ("login.html", include_str!("../templates/login.html")),
         ("setup.html", include_str!("../templates/setup.html")),
     ])

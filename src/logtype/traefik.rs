@@ -173,6 +173,7 @@ mod tests {
         let meta = Meta {
             source_ip: "192.168.1.9".into(),
             hostname: None,
+            tag: None,
             received_at: Utc::now(),
         };
         assert!(traefik.ingest(line, &meta, &conn).unwrap());
@@ -211,7 +212,8 @@ mod tests {
     fn rejects_non_json() {
         let conn = duckdb::Connection::open_in_memory().unwrap();
         Traefik.init_schema(&conn).unwrap();
-        let meta = Meta { source_ip: "x".into(), hostname: None, received_at: Utc::now() };
+        let meta = Meta { source_ip: "x".into(), hostname: None,
+            tag: None, received_at: Utc::now() };
         assert!(!Traefik.ingest("not json", &meta, &conn).unwrap());
     }
 }

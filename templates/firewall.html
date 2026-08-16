@@ -1,0 +1,188 @@
+{# firewall.html — dashboard for firewall logs (Cisco ASA, PAN-OS, …): KPIs
+   built around the allow/deny split, an events timeline, the action breakdown,
+   top sources / destinations / ports / countries, the world map of where traffic
+   came from, plus any dimension the vendor alone logs (see web/firewall.rs).
+   Type-specific values arrive in the context: type_label, type_icon, badge,
+   hint, base, extra_panels. #}
+{% extends "base.html" %}
+{% block title %}{{ type_label }} — EasyLog{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0"><i class="bi {{ type_icon }} me-2"></i>{{ type_label }}</h1>
+  <span class="badge text-bg-secondary">{{ badge }}</span>
+</div>
+
+{% if not has_data %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+      No {{ type_label }} events yet. Add a {{ type_label }} <a href="/sources">source</a> and
+      {{ hint }} — parsed events will appear here.
+    </div>
+  </div>
+{% else %}
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-clock-history me-1"></i>Range</span>
+  <div class="btn-group btn-group-sm" role="group" aria-label="Time range">
+    {% for r in range_options %}
+    <a href="{{ r.href }}" class="btn btn-outline-primary {% if r.active %}active{% endif %}">{{ r.label }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+{% if has_filters %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-funnel me-1"></i>Filters</span>
+  {% for c in chips %}
+  <a href="{{ c.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
+    {{ c.label }} <i class="bi bi-x-lg ms-1"></i>
+  </a>
+  {% endfor %}
+  <a href="{{ base }}" class="small text-decoration-none ms-1">Clear all</a>
+</div>
+{% endif %}
+
+{% if kpis.events == 0 %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-search fs-2 d-block mb-2"></i>
+      No events match the current range and filters.
+    </div>
+  </div>
+{% else %}
+
+<div class="row row-cols-2 row-cols-lg-6 g-3 mb-4">
+  <div class="col"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-activity me-1"></i>Events</h6>
+    <div class="stat-value">{{ kpis.events }}</div>
+  </div></div></div>
+  <div class="col"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-shield-x me-1"></i>Denied</h6>
+    <div class="stat-value">{{ kpis.denied }}</div>
+  </div></div></div>
+  <div class="col"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-percent me-1"></i>Deny rate</h6>
+    <div class="stat-value">{{ kpis.deny_rate }}</div>
+  </div></div></div>
+  <div class="col"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-pc-display me-1"></i>Sources</h6>
+    <div class="stat-value">{{ kpis.sources }}</div>
+  </div></div></div>
+  <div class="col"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-globe2 me-1"></i>Countries</h6>
+    <div class="stat-value">{{ kpis.countries }}</div>
+  </div></div></div>
+  <div class="col"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-arrow-down-up me-1"></i>Bytes</h6>
+    <div class="stat-value">{{ kpis.total_bytes }}</div>
+  </div></div></div>
+</div>
+
+<div class="card mb-4"><div class="card-body">
+  <h6 class="section-title mb-3"><i class="bi bi-bar-chart-line me-1"></i>Events over time
+    <span class="text-secondary">({{ range_label }})</span></h6>
+  <div class="tl-chart" data-tl-gran="{{ tl_gran }}">
+    <div class="tl-yaxis"><div>{{ timeline_max }}</div><div>{{ timeline_mid }}</div><div>0</div></div>
+    <div class="tl-plot">
+      <div class="tl-bars">
+        {% for b in timeline %}
+        <div class="col" data-ts="{{ b.ts_epoch }}" data-count="{{ b.count }}">
+          <div class="bar bg-primary" style="height:{{ b.pct }}%" data-bs-toggle="tooltip"
+               title="{{ b.label }} — {{ b.count }}"></div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="tl-xaxis">
+        {% for b in timeline %}<div class="xl" data-ts="{{ b.ts_epoch }}">{{ b.label }}</div>{% endfor %}
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<div class="card mb-4"><div class="card-body">
+  <h6 class="section-title mb-3"><i class="bi bi-shield-check me-1"></i>Action <span class="text-secondary">(click to filter)</span></h6>
+  {% for a in actions %}
+  <a href="{{ a.href }}" class="d-flex align-items-center mb-2 text-decoration-none" title="Filter to {{ a.label }}">
+    <div class="text-uppercase small fw-semibold" style="width:64px">{{ a.label }}</div>
+    <div class="progress flex-grow-1" style="height:16px">
+      <div class="progress-bar {{ a.css }}" style="width:{{ a.pct }}%"></div>
+    </div>
+    <div class="text-secondary text-end font-monospace" style="width:64px">{{ a.count }}</div>
+  </a>
+  {% endfor %}
+</div></div>
+
+{% include "_worldmap.html" %}
+
+<div class="row g-4">
+  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-pc-display me-1"></i>Top sources <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in top_sources %}
+      <tr>
+        <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
+  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-hdd-network me-1"></i>Top destinations <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in top_destinations %}
+      <tr>
+        <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
+  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-ethernet me-1"></i>Top destination ports <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in top_ports %}
+      <tr>
+        <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to port {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
+  {% for p in extra_panels %}
+  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi {{ p.icon }} me-1"></i>{{ p.title }} <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in p.bars %}
+      <tr>
+        <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
+  {% endfor %}
+  <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-globe2 me-1"></i>Top countries <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in top_countries %}
+      <tr>
+        <td class="small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
+</div>
+
+<p class="text-secondary small mt-4 mb-0">
+  IP geolocation by <a href="https://db-ip.com" class="text-secondary" rel="noopener">DB-IP</a> (CC BY 4.0).
+</p>
+{% endif %}
+{% endif %}
+{% endblock %}

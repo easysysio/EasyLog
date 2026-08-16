@@ -20,6 +20,8 @@ use std::collections::HashMap;
 
 pub mod apache;
 pub mod caddy;
+pub mod cisco_asa;
+pub mod firewall;
 pub mod haproxy;
 pub mod nginx;
 pub mod traefik;
@@ -33,6 +35,10 @@ pub struct Meta {
     /// parsers; not yet consumed by the Apache type.
     #[allow(dead_code)]
     pub hostname: Option<String>,
+    /// Syslog tag / APP-NAME, e.g. "apache" or "%ASA-4-106023". Cisco puts the
+    /// message ID here, and syslog_loose strips it from the body, so parsers
+    /// that need it read it from the envelope.
+    pub tag: Option<String>,
     /// Time EasyLog received the message.
     pub received_at: DateTime<Utc>,
 }
@@ -143,6 +149,8 @@ impl Registry {
         types.insert(caddy.name(), Box::new(caddy));
         let haproxy = haproxy::HAProxy;
         types.insert(haproxy.name(), Box::new(haproxy));
+        let cisco_asa = cisco_asa::CiscoAsa;
+        types.insert(cisco_asa.name(), Box::new(cisco_asa));
         Registry { types }
     }
 
