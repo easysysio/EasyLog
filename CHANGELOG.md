@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Searching from the raw view returned "duplicate field `view`" (HTTP 400).**
+  The form carried the active filters as hidden fields *and* added its own
+  `view=raw`, so submitting it sent the parameter twice. The preserved fields now
+  leave `view` and `limit` to the template, which also means a new search starts
+  at the first page of lines instead of keeping the previous "Load more" depth.
+
 ## [0.6.0] — 2026-08-17
 
 ### Added

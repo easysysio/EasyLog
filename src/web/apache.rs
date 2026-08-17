@@ -103,7 +103,10 @@ impl Filter {
     // The active filter minus the search term, as form fields — so submitting
     // the search box keeps the range and any drill-down instead of dropping it.
     fn hidden_fields(&self) -> Vec<HiddenField> {
-        let without_q = Filter { q: None, ..self.clone() };
+        // `view` and `limit` are deliberately dropped: the template that needs a
+        // view emits its own hidden input (two would be a duplicate field and a
+        // 400), and a fresh search should start at the first page of results.
+        let without_q = Filter { q: None, view: None, limit: None, ..self.clone() };
         serde_urlencoded::to_string(&without_q)
             .ok()
             .and_then(|s| serde_urlencoded::from_str::<Vec<(String, String)>>(&s).ok())
