@@ -174,7 +174,26 @@ geo_db_path = ""          # external MaxMind .mmdb; empty = bundled DB-IP Lite
 
 retention_days = 0        # delete events older than N days; 0 = keep everything
 auto_compact   = true     # rewrite the database at startup to reclaim disk
+
+log_dir        = "/var/log/easylog"   # EasyLog's own logs; "" = stdout only
+log_level      = "info"               # RUST_LOG overrides this
+log_keep_days  = 14                   # daily rotation, files kept
 ```
+
+### EasyLog's own logs
+
+Alongside stdout (so `journalctl -u easylog` keeps working), EasyLog writes two
+files under `log_dir`:
+
+| File | Contents |
+|------|----------|
+| `easylog.log` | Startup and config, geolocation database in use, retention prunes and compactions, and a per-minute ingest summary: received, stored, unparsed, unknown source, queue-full drops |
+| `audit.log` | Actions through the UI — sign-ins and failed attempts, sign-outs, first-run admin creation, sources added and removed — each with the account and client address |
+
+Both roll daily and keep `log_keep_days` files, so logrotate isn't needed. The
+systemd unit creates `/var/log/easylog` itself (`LogsDirectory`). If the
+directory can't be written, EasyLog warns and logs to stdout only rather than
+refusing to start.
 
 Log sources are **not** configured here — they're managed in the database via the
 web UI (see below).

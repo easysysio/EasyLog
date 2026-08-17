@@ -46,6 +46,52 @@ const UDP_RECV_BUFFER_BYTES: usize = 8 * 1024 * 1024;
 // throttled warning rather than one log line per dropped packet.
 static DROPPED: AtomicU64 = AtomicU64::new(0);
 
+// Ingest counters, reported as a periodic summary in easylog.log. Per-message
+// logging would be unusable at syslog volumes, but "how much is arriving and how
+// much is being thrown away, and why" is exactly what an operator needs.
+static RECEIVED: AtomicU64 = AtomicU64::new(0);
+static STORED: AtomicU64 = AtomicU64::new(0);
+static UNPARSED: AtomicU64 = AtomicU64::new(0);
+static NO_SOURCE: AtomicU64 = AtomicU64::new(0);
+
+// How often the summary is written.
+const STATS_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// report_stats()
+// Logs one ingest summary per interval, and stays quiet when nothing arrived so
+// an idle collector doesn't fill its log with zeroes.
+// ─────────────────────────────────────────────────────────────────────────────
+async fn report_stats() {
+    let mut last = (0u64, 0u64, 0u64, 0u64, 0u64);
+    loop {
+        tokio::time::sleep(STATS_INTERVAL).await;
+        let now = (
+            RECEIVED.load(Ordering::Relaxed),
+            STORED.load(Ordering::Relaxed),
+            UNPARSED.load(Ordering::Relaxed),
+            NO_SOURCE.load(Ordering::Relaxed),
+            DROPPED.load(Ordering::Relaxed),
+        );
+        let (received, stored, unparsed, no_source, dropped) = (
+            now.0 - last.0,
+            now.1 - last.1,
+            now.2 - last.2,
+            now.3 - last.3,
+            now.4 - last.4,
+        );
+        last = now;
+        if received == 0 && no_source == 0 {
+            continue;
+        }
+        tracing::info!(
+            "ingest: received {received}, stored {stored}, unparsed {unparsed}, \
+             unknown source {no_source}, queue-full drops {dropped} (last {}s)",
+            STATS_INTERVAL.as_secs()
+        );
+    }
+}
+
 // A unit of work handed from a receive loop to the writer task: which log type
 // to route to, the raw MSG body, and the syslog envelope metadata. Owns its
 // data so it can cross the channel without borrowing from the recv buffer.
@@ -67,6 +113,8 @@ pub async fn serve(state: Arc<AppState>) -> Result<()> {
     let (tx, rx) = mpsc::channel::<WorkItem>(CHANNEL_CAPACITY);
 
     let writer = tokio::spawn(writer_task(state.clone(), rx));
+    // Periodic ingest summary for easylog.log; runs for the life of the process.
+    tokio::spawn(report_stats());
     let udp = tokio::spawn(serve_udp(state.clone(), addr.clone(), tx.clone()));
     let tcp = tokio::spawn(serve_tcp(state.clone(), addr, tx));
 
@@ -227,6 +275,7 @@ async fn serve_tcp(state: Arc<AppState>, addr: (String, u16), tx: mpsc::Sender<W
 // recv loop). received_at is stamped here, at receive time.
 // ─────────────────────────────────────────────────────────────────────────────
 fn enqueue(state: &Arc<AppState>, tx: &mpsc::Sender<WorkItem>, ip: IpAddr, line: &str) {
+    RECEIVED.fetch_add(1, Ordering::Relaxed);
     let msg = parse_message(line, Variant::Either);
     let ip_str = ip.to_string();
     let hostname = msg.hostname.map(|h| h.to_string());
@@ -236,6 +285,7 @@ fn enqueue(state: &Arc<AppState>, tx: &mpsc::Sender<WorkItem>, ip: IpAddr, line:
         map.get(&ip_str).map(|s| s.log_type.clone())
     };
     let Some(type_name) = type_name else {
+        NO_SOURCE.fetch_add(1, Ordering::Relaxed);
         tracing::debug!("no source configured for {ip_str}; dropping");
         return;
     };
@@ -317,8 +367,13 @@ fn flush_batch(state: &Arc<AppState>, batch: &mut Vec<WorkItem>) {
             continue;
         };
         match log_type.ingest(&item.raw, &item.meta, &conn) {
-            Ok(true) => {}
-            Ok(false) => tracing::debug!("{} line did not parse: {}", item.type_name, item.raw),
+            Ok(true) => {
+                STORED.fetch_add(1, Ordering::Relaxed);
+            }
+            Ok(false) => {
+                UNPARSED.fetch_add(1, Ordering::Relaxed);
+                tracing::debug!("{} line did not parse: {}", item.type_name, item.raw);
+            }
             Err(e) => tracing::error!("{} ingest failed: {e:#}", item.type_name),
         }
     }

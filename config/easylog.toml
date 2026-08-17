@@ -37,5 +37,15 @@ retention_days = 0
 # disable (the database then keeps its high-water mark).
 auto_compact = true
 
+
+# EasyLog's own logs. easylog.log records startup, ingest counters (received /
+# stored / unparsed / unknown source) and retention work; audit.log records who
+# signed in, and who added or removed a source, with the client address. Both
+# roll daily and keep `log_keep_days` files — no logrotate needed. Leave log_dir
+# empty to log to stdout only (journald, containers).
+log_dir        = "/var/log/easylog"
+log_level      = "info"      # error | warn | info | debug | trace (RUST_LOG wins)
+log_keep_days  = 14
+
 # Log sources (which sending host maps to which log type) are managed in the
 # database via the web UI at http://<host>:<web_port>/sources — not here.

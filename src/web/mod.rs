@@ -13,9 +13,11 @@ use std::sync::atomic::Ordering;
 
 use chrono::{Datelike, Duration, NaiveDate, Timelike, Utc};
 
+use std::net::SocketAddr;
+
 use axum::{
     Form, Json, Router,
-    extract::{Path, Request, State},
+    extract::{ConnectInfo, Path, Request, State},
     http::Uri,
     http::{StatusCode, header},
     middleware::{self, Next},
@@ -27,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 
 use crate::auth;
+use crate::logging::audit::{self, Actor};
 use crate::sources::{self, Source};
 use crate::state::{AppState, WebState};
 
@@ -95,7 +98,9 @@ pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
     let addr = format!("0.0.0.0:{port}");
     let listener = TcpListener::bind(&addr).await?;
     tracing::info!("EasyLog web listening on http://{addr}");
-    axum::serve(listener, app).await?;
+    // into_make_service_with_connect_info exposes the peer address, which the
+    // audit log records alongside each action.
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
     Ok(())
 }
 
@@ -221,6 +226,13 @@ async fn require_auth(
     }
 }
 
+// The account behind a request, for the audit log: the signed session cookie's
+// username, or "-" when there is no session yet (sign-in, first-run setup).
+fn actor(jar: &SignedCookieJar, addr: SocketAddr) -> Actor {
+    let name = jar.get("session").map(|c| c.value().to_string()).unwrap_or_default();
+    Actor::new(name, addr.ip().to_string())
+}
+
 // Builds a signed session cookie carrying the logged-in username.
 fn session_cookie(username: String) -> Cookie<'static> {
     Cookie::build(("session", username))
@@ -251,6 +263,7 @@ struct LoginForm {
 // ─────────────────────────────────────────────────────────────────────────────
 async fn login_submit(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: SignedCookieJar,
     Form(form): Form<LoginForm>,
 ) -> Result<Response, AppError> {
@@ -258,10 +271,15 @@ async fn login_submit(
         let conn = state.db.lock().expect("db mutex poisoned");
         auth::verify_credentials(&conn, &form.username, &form.password)?
     };
+    let username = form.username.trim().to_string();
+    let who = Actor::new(username.clone(), addr.ip().to_string());
     if ok {
-        let jar = jar.add(session_cookie(form.username.trim().to_string()));
+        audit::record("login.success", &who, "signed in");
+        let jar = jar.add(session_cookie(username));
         Ok((jar, Redirect::to("/")).into_response())
     } else {
+        // Failed attempts are the ones worth having a record of.
+        audit::record("login.failure", &who, "invalid username or password");
         let mut ctx = tera::Context::new();
         ctx.insert("error", "Invalid username or password.");
         Ok(Html(state.tera.render("login.html", &ctx)?).into_response())
@@ -290,6 +308,7 @@ struct SetupForm {
 // ─────────────────────────────────────────────────────────────────────────────
 async fn setup_submit(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: SignedCookieJar,
     Form(form): Form<SetupForm>,
 ) -> Result<Response, AppError> {
@@ -311,7 +330,10 @@ async fn setup_submit(
     match result {
         Ok(()) => {
             state.needs_setup.store(false, Ordering::Relaxed);
-            let jar = jar.add(session_cookie(form.username.trim().to_string()));
+            let username = form.username.trim().to_string();
+            let who = Actor::new(username.clone(), addr.ip().to_string());
+            audit::record("admin.create", &who, "first-run administrator created");
+            let jar = jar.add(session_cookie(username));
             Ok((jar, Redirect::to("/")).into_response())
         }
         Err(e) => render_err(&e.to_string()),
@@ -321,7 +343,11 @@ async fn setup_submit(
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /logout — clear the session cookie.
 // ─────────────────────────────────────────────────────────────────────────────
-async fn logout(jar: SignedCookieJar) -> (SignedCookieJar, Redirect) {
+async fn logout(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    jar: SignedCookieJar,
+) -> (SignedCookieJar, Redirect) {
+    audit::record("logout", &actor(&jar, addr), "signed out");
     let removal = Cookie::build(("session", "")).path("/").build();
     (jar.remove(removal), Redirect::to("/login"))
 }
@@ -532,6 +558,8 @@ struct AddForm {
 // ─────────────────────────────────────────────────────────────────────────────
 async fn add_source(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    jar: SignedCookieJar,
     Form(form): Form<AddForm>,
 ) -> Result<axum::response::Response, AppError> {
     if !state.registry.names().contains(&form.log_type.as_str()) {
@@ -546,6 +574,11 @@ async fn add_source(
     match result {
         Ok(()) => {
             state.reload_sources()?;
+            audit::record(
+                "source.add",
+                &actor(&jar, addr),
+                &format!("{} ({}) as {}", form.name, form.ip, form.log_type),
+            );
             Ok(Redirect::to("/sources").into_response())
         }
         // Validation errors (bad IP, empty name) are shown to the user inline.
@@ -565,6 +598,8 @@ struct DeleteForm {
 // ─────────────────────────────────────────────────────────────────────────────
 async fn delete_source(
     State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    jar: SignedCookieJar,
     Form(form): Form<DeleteForm>,
 ) -> Result<Redirect, AppError> {
     {
@@ -572,6 +607,7 @@ async fn delete_source(
         sources::remove(&conn, &form.ip)?;
     }
     state.reload_sources()?;
+    audit::record("source.remove", &actor(&jar, addr), &form.ip);
     Ok(Redirect::to("/sources"))
 }
 

@@ -48,6 +48,16 @@ pub struct Config {
     /// file on its own. Only runs before ingestion starts.
     #[serde(default = "default_auto_compact")]
     pub auto_compact: bool,
+    /// Directory for EasyLog's own logs (easylog.log and audit.log). Empty logs
+    /// to stdout only, which is all a container or a journald setup needs.
+    #[serde(default = "default_log_dir")]
+    pub log_dir: String,
+    /// Verbosity when RUST_LOG isn't set: error, warn, info, debug or trace.
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+    /// How many daily log files to keep before the oldest is removed.
+    #[serde(default = "default_log_keep_days")]
+    pub log_keep_days: u16,
 }
 
 fn default_bind() -> String {
@@ -68,6 +78,15 @@ fn default_duckdb_memory_limit() -> String {
 fn default_duckdb_threads() -> u16 {
     2
 }
+fn default_log_dir() -> String {
+    "/var/log/easylog".to_string()
+}
+fn default_log_level() -> String {
+    "info".to_string()
+}
+fn default_log_keep_days() -> u16 {
+    14
+}
 fn default_auto_compact() -> bool {
     true
 }
@@ -84,6 +103,9 @@ impl Default for Config {
             geo_db_path: String::new(),
             retention_days: 0,
             auto_compact: default_auto_compact(),
+            log_dir: default_log_dir(),
+            log_level: default_log_level(),
+            log_keep_days: default_log_keep_days(),
         }
     }
 }

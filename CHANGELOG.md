@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **EasyLog now keeps its own logs**, under `/var/log/easylog` by default:
+  `easylog.log` for operations — startup and config, the geolocation database in
+  use, retention prunes and compactions, and a per-minute ingest summary
+  (received / stored / unparsed / unknown source / queue-full drops) — and
+  `audit.log` for actions taken through the UI: sign-ins and failed attempts,
+  sign-outs, first-run admin creation, and sources added or removed, each with
+  the account and the client address. Both roll daily and keep `log_keep_days`
+  files (default 14), so no logrotate is required; the systemd unit creates the
+  directory via `LogsDirectory`. Everything still goes to stdout as well, so
+  `journalctl -u easylog` is unchanged, and an unwritable log directory logs a
+  warning and carries on rather than stopping the service. Set `log_dir = ""`
+  for stdout only.
 - **Search on every dashboard.** A search box next to the time-range selector
   matches free text across the fields that dashboard cares about — URL, client
   IP, user agent, referer and host on the web types (plus routers/services or

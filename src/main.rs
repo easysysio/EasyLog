@@ -12,6 +12,7 @@
 mod auth;
 mod config;
 mod geo;
+mod logging;
 mod logtype;
 mod retention;
 mod sources;
@@ -72,14 +73,13 @@ fn load_templates() -> Result<Tera> {
 // ─────────────────────────────────────────────────────────────────────────────
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .init();
-
+    // The config decides where logs go, so it is read before the subscriber is
+    // installed; anything that goes wrong here is reported by the returned error.
     let config_path = std::env::var("EASYLOG_CONFIG").unwrap_or_else(|_| DEFAULT_CONFIG.to_string());
     let config = Config::load(&config_path)?;
+    // Held for the life of the process: dropping it stops the file writers.
+    let _log_guards = logging::init(&config);
+    tracing::info!("EasyLog v{} starting (config {config_path})", env!("CARGO_PKG_VERSION"));
 
     // Load the IP geolocation database (bundled DB-IP Lite, or an external mmdb).
     geo::init(&config.geo_db_path);

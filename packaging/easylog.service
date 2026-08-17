@@ -20,7 +20,9 @@ RestartSec=2
 # mount-namespace sandboxing are unreliable). StateDirectory creates and owns
 # the database directory /var/lib/easylog. Lightweight, namespace-free hardening
 # only, so the service starts in restricted container environments.
+# LogsDirectory creates and owns /var/log/easylog for easylog.log + audit.log.
 StateDirectory=easylog
+LogsDirectory=easylog
 NoNewPrivileges=yes
 
 [Install]
