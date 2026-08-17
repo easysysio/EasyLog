@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-17
+
 ### Added
 - **Raw view on every dashboard.** A **Raw** button swaps the charts for the
   actual log lines behind them, newest first, and **Dashboard** swaps back. It
