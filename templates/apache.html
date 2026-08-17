@@ -38,6 +38,10 @@
       <button class="btn btn-outline-primary" type="submit">Search</button>
     </div>
   </form>
+  {# The same filters, shown as the log lines behind them. #}
+  <a href="{{ raw_href }}" class="btn btn-sm btn-outline-secondary"
+     title="Show the raw log lines for these filters">
+    <i class="bi bi-card-text me-1"></i>Raw</a>
 </div>
 
 {% if has_filters %}

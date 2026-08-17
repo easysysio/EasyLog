@@ -39,6 +39,14 @@
     .tl-xaxis .xl { flex:1; text-align:center; font-size:.7rem;
                     color:var(--bs-secondary-color); white-space:nowrap; overflow:hidden; }
     .truncate { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:0; }
+    /* Raw log lines: monospace, wrapping, alternating rows so long lines stay
+       readable. The timestamp column keeps its width so lines align. */
+    .raw-lines { font-family:var(--bs-font-monospace); font-size:.8125rem; }
+    .raw-line { display:flex; gap:.75rem; padding:.25rem .5rem; border-radius:4px;
+                align-items:flex-start; }
+    .raw-line:nth-child(odd) { background:var(--bs-tertiary-bg); }
+    .raw-ts { color:var(--bs-secondary-color); white-space:nowrap; flex:0 0 auto; }
+    .raw-text { word-break:break-all; white-space:pre-wrap; }
     /* Second navigation row: the dashboards of the expanded category. Scrolls
        sideways rather than wrapping, so many vendors stay usable on a phone. */
     .nav-category { background:none; border:0; }
@@ -151,6 +159,15 @@
   </div>
   <script src="/static/bootstrap.bundle.min.js"></script>
   <script>
+  (function () {
+    // Raw-line timestamps are stored (and rendered) in UTC; show them in the
+    // browser's timezone, matching how the timeline labels behave.
+    document.querySelectorAll('.raw-ts[data-ts-utc]').forEach(function (el) {
+      var iso = el.dataset.tsUtc.trim().replace(' ', 'T') + 'Z';
+      var d = new Date(iso);
+      if (!isNaN(d)) { el.textContent = d.toLocaleString(); }
+    });
+  })();
   (function () {
     // Category tabs expand their dashboard row instead of navigating; clicking
     // the open one closes it. Only one row is ever visible.

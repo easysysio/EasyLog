@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Raw view on every dashboard.** A **Raw** button swaps the charts for the
+  actual log lines behind them, newest first, and **Dashboard** swaps back. It
+  isn't a separate page: the time range, every drill-down filter and the search
+  term still apply, so the lines shown are exactly the events the charts were
+  summarising, and `?view=raw` in the URL keeps that shareable. 200 lines at a
+  time with **Load more**, and **Download** streams every matching line as a
+  `.log` file (read in batches so a large export doesn't hold the database lock
+  and stall ingestion; capped at 500,000 lines, which the file states if hit).
 - **EasyLog now keeps its own logs**, under `/var/log/easylog` by default:
   `easylog.log` for operations — startup and config, the geolocation database in
   use, retention prunes and compactions, and a per-minute ingest summary
@@ -31,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removable chip, and is carried in the URL so a search is shareable.
 
 ### Fixed
+- **Cisco ASA and PAN-OS now store the whole message.** Both formats have a
+  leading token that syslog parsers mistake for a tag and strip — the ASA's
+  `%ASA-4-106023:`, PAN-OS's `1,<receive time>`. The parsers already recovered it
+  to read the event, but stored the truncated remainder, which the new raw view
+  made visible. They now store the line they actually parsed.
 - **Firewall tables now gain new columns on upgrade.** `CREATE TABLE IF NOT
   EXISTS` doesn't add columns to a table that already exists, so a database
   created by an earlier build was missing `application` and failed any query

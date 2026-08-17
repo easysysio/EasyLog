@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use axum::{
     extract::{Query, State},
-    response::Html,
+    response::Response,
 };
 
 use super::AppError;
@@ -40,6 +40,6 @@ const SPEC: Spec = Spec {
 pub async fn dashboard(
     State(state): State<Arc<AppState>>,
     Query(filter): Query<Filter>,
-) -> Result<Html<String>, AppError> {
+) -> Result<Response, AppError> {
     super::proxy::render(&state, filter, &SPEC)
 }

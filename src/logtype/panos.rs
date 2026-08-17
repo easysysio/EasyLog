@@ -135,11 +135,14 @@ pub fn parse_line(line: &str) -> Option<FirewallEvent> {
 // every field. When the body alone doesn't parse, the tag is put back and the
 // line retried.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn parse_event(body: &str, tag: Option<&str>) -> Option<FirewallEvent> {
+pub fn parse_event(body: &str, tag: Option<&str>) -> Option<(FirewallEvent, String)> {
     if let Some(event) = parse_line(body) {
-        return Some(event);
+        return Some((event, body.to_string()));
     }
-    parse_line(&format!("{} {}", tag?, body))
+    // Rejoined here, and returned so the stored line is the whole record rather
+    // than the fragment the syslog parser left behind.
+    let rejoined = format!("{} {}", tag?, body);
+    parse_line(&rejoined).map(|event| (event, rejoined))
 }
 
 impl LogType for PanOs {
@@ -164,10 +167,10 @@ impl LogType for PanOs {
     }
 
     fn ingest(&self, raw: &str, meta: &Meta, conn: &Connection) -> Result<bool> {
-        let Some(event) = parse_event(raw, meta.tag.as_deref()) else {
+        let Some((event, line)) = parse_event(raw, meta.tag.as_deref()) else {
             return Ok(false);
         };
-        firewall::insert(conn, "panos", &event, meta, raw)?;
+        firewall::insert(conn, "panos", &event, meta, &line)?;
         Ok(true)
     }
 }
@@ -233,10 +236,13 @@ mod tests {
         // APP-NAME, leaving the body starting mid-timestamp.
         let (tag, rest) = TRAFFIC.split_once(' ').unwrap();
         assert!(parse_line(rest).is_none(), "the split body must not parse as-is");
-        let e = parse_event(rest, Some(tag)).expect("should parse once rejoined");
+        let (e, line) = parse_event(rest, Some(tag)).expect("should parse once rejoined");
         assert_eq!(e.src_ip, "203.0.113.9");
         assert_eq!(e.dst_port, Some(443), "fields must not be shifted");
         assert_eq!(e.application, "web-browsing");
+        // The stored line is the whole record, so the raw view shows what the
+        // firewall actually sent — not the fragment syslog left.
+        assert_eq!(line, TRAFFIC);
     }
 
     #[test]

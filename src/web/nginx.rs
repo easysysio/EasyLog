@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use axum::{
     extract::{Query, State},
-    response::Html,
+    response::Response,
 };
 
 use super::AppError;
@@ -23,6 +23,6 @@ use crate::state::AppState;
 pub async fn dashboard(
     State(state): State<Arc<AppState>>,
     Query(filter): Query<Filter>,
-) -> Result<Html<String>, AppError> {
+) -> Result<Response, AppError> {
     render(&state, filter, "nginx", "/web/nginx", "Nginx", "apache.html")
 }

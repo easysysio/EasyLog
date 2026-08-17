@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use axum::{
     extract::{Query, State},
-    response::Html,
+    response::{Html, IntoResponse, Response},
 };
 use chrono::{Duration, Utc};
 use duckdb::params_from_iter;
@@ -41,6 +41,13 @@ pub(crate) struct Filter {
     country: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     range: Option<String>,
+    /// "raw" lists the matching log lines instead of the charts; "download"
+    /// streams them as a file. Anything else renders the dashboard.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    view: Option<String>,
+    /// How many raw lines to show; grows as "Load more" is used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    limit: Option<usize>,
     /// Free-text search across the columns in SEARCH_COLUMNS.
     #[serde(skip_serializing_if = "Option::is_none")]
     q: Option<String>,
@@ -69,8 +76,29 @@ impl Filter {
             country: clean(self.country),
             range,
             q: clean(self.q),
+            view: clean(self.view),
+            limit: self.limit,
         }
     }
+    // Raw-view helpers: the toggle in and out, and the growing page size.
+    fn view_key(&self) -> &str {
+        self.view.as_deref().unwrap_or("")
+    }
+    fn raw_limit(&self) -> usize {
+        self.limit
+            .unwrap_or(super::rawview::PAGE)
+            .clamp(super::rawview::PAGE, 20_000)
+    }
+    fn with_view(&self, v: &str) -> Filter {
+        Filter { view: Some(v.to_string()), limit: None, ..self.clone() }
+    }
+    fn without_view(&self) -> Filter {
+        Filter { view: None, limit: None, ..self.clone() }
+    }
+    fn with_limit(&self, n: usize) -> Filter {
+        Filter { limit: Some(n), ..self.clone() }
+    }
+
 
     // The active filter minus the search term, as form fields — so submitting
     // the search box keeps the range and any drill-down instead of dropping it.
@@ -249,7 +277,7 @@ struct Bar {
 pub async fn dashboard(
     State(state): State<Arc<AppState>>,
     Query(filter): Query<Filter>,
-) -> Result<Html<String>, AppError> {
+) -> Result<Response, AppError> {
     render(&state, filter, "apache", "/web/apache", "Apache", "apache.html")
 }
 
@@ -266,11 +294,59 @@ pub(crate) fn render(
     base: &str,
     type_label: &str,
     template: &str,
-) -> Result<Html<String>, AppError> {
+) -> Result<Response, AppError> {
     let filter = raw.normalized();
     let range = filter.range_key().to_string();
     let (conds, vals) = filter.sql();
     let where_clause = build_where(&conds);
+
+
+    let (range_options, chips) = furniture(&filter, base, &range);
+
+    // Raw mode reuses this dashboard's WHERE clause, so the lines listed are
+    // exactly the events the charts summarise. Handled before the database lock
+    // is taken: rawview does its own locking, and the aggregations below would
+    // be wasted work.
+    if matches!(filter.view_key(), "raw" | "download") {
+        if filter.view_key() == "download" {
+            return Ok(super::rawview::download(
+                state,
+                table,
+                &where_clause,
+                &vals,
+                super::rawview::filename(table),
+            ));
+        }
+        let mut ctx = tera::Context::new();
+        ctx.insert("active", table);
+        ctx.insert("active_category", "web");
+        ctx.insert("nav", &state.nav);
+        ctx.insert("type_label", type_label);
+        ctx.insert("base", base);
+        ctx.insert("chips", &chips);
+        ctx.insert("range_options", &range_options);
+        ctx.insert("range_label", range_label(&range));
+        ctx.insert("has_filters", &!chips.is_empty());
+        ctx.insert("search", &filter.q.clone().unwrap_or_default());
+        ctx.insert("search_fields", &filter.hidden_fields());
+        ctx.insert("search_placeholder", "Search URL, client IP, agent…");
+    ctx.insert("raw_href", &filter.with_view("raw").href(base));
+        ctx.insert("dashboard_href", &filter.without_view().href(base));
+        ctx.insert(
+            "more_href",
+            &filter.with_limit(filter.raw_limit() + super::rawview::PAGE).href(base),
+        );
+        ctx.insert("download_href", &filter.with_view("download").href(base));
+        return Ok(super::rawview::render(
+            state,
+            ctx,
+            table,
+            &where_clause,
+            &vals,
+            filter.raw_limit(),
+        )?
+        .into_response());
+    }
 
     let conn = state.db.lock().expect("db mutex poisoned");
 
@@ -379,6 +455,40 @@ pub(crate) fn render(
         filter.with_country(name).href(base)
     }));
 
+    let mut ctx = tera::Context::new();
+    ctx.insert("active", table);
+    ctx.insert("active_category", "web");
+    ctx.insert("nav", &state.nav);
+    ctx.insert("type_label", type_label);
+    ctx.insert("base", base);
+    ctx.insert("kpis", &kpis);
+    ctx.insert("timeline", &timeline);
+    ctx.insert("timeline_max", &timeline_max);
+    ctx.insert("timeline_mid", &(timeline_max / 2));
+    ctx.insert("tl_gran", tl_gran);
+    ctx.insert("statuses", &statuses);
+    ctx.insert("top_urls", &top_urls);
+    ctx.insert("top_ips", &top_ips);
+    ctx.insert("top_countries", &top_countries);
+    ctx.insert("map", &map);
+    ctx.insert("chips", &chips);
+    ctx.insert("search", &filter.q.clone().unwrap_or_default());
+    ctx.insert("search_fields", &filter.hidden_fields());
+    ctx.insert("search_placeholder", "Search URL, client IP, agent…");
+    ctx.insert("raw_href", &filter.with_view("raw").href(base));
+    ctx.insert("range_options", &range_options);
+    ctx.insert("range_label", range_label(&range));
+    ctx.insert("has_filters", &!chips.is_empty());
+    ctx.insert("has_data", &(total_rows > 0));
+    Ok(Html(state.tera.render(template, &ctx)?).into_response())
+}
+
+// Runs a "top N by count" query for `column` over the bounded set, turning each
+// row into a clickable Bar via `href_for(label)`.
+// The furniture every view of this dashboard shares: the range selector and the
+// chips for whatever filters are active. Pure functions of the filter, so the
+// raw view can build them without touching the database.
+fn furniture(filter: &Filter, base: &str, range: &str) -> (Vec<RangeOpt>, Vec<Chip>) {
     // Time-range selector options.
     let range_defs = [("1h", "Hour"), ("24h", "24 h"), ("7d", "Week"), ("30d", "Month"), ("1y", "Year")];
     let range_options: Vec<RangeOpt> = range_defs
@@ -407,36 +517,9 @@ pub(crate) fn render(
     if let Some(q) = &filter.q {
         chips.push(Chip { label: format!("Search: {q}"), remove: filter.without_q().href(base) });
     }
-
-    let mut ctx = tera::Context::new();
-    ctx.insert("active", table);
-    ctx.insert("active_category", "web");
-    ctx.insert("nav", &state.nav);
-    ctx.insert("type_label", type_label);
-    ctx.insert("base", base);
-    ctx.insert("kpis", &kpis);
-    ctx.insert("timeline", &timeline);
-    ctx.insert("timeline_max", &timeline_max);
-    ctx.insert("timeline_mid", &(timeline_max / 2));
-    ctx.insert("tl_gran", tl_gran);
-    ctx.insert("statuses", &statuses);
-    ctx.insert("top_urls", &top_urls);
-    ctx.insert("top_ips", &top_ips);
-    ctx.insert("top_countries", &top_countries);
-    ctx.insert("map", &map);
-    ctx.insert("chips", &chips);
-    ctx.insert("search", &filter.q.clone().unwrap_or_default());
-    ctx.insert("search_fields", &filter.hidden_fields());
-    ctx.insert("search_placeholder", "Search URL, client IP, agent…");
-    ctx.insert("range_options", &range_options);
-    ctx.insert("range_label", range_label(&range));
-    ctx.insert("has_filters", &!chips.is_empty());
-    ctx.insert("has_data", &(total_rows > 0));
-    Ok(Html(state.tera.render(template, &ctx)?))
+    (range_options, chips)
 }
 
-// Runs a "top N by count" query for `column` over the bounded set, turning each
-// row into a clickable Bar via `href_for(label)`.
 fn top_n(
     conn: &duckdb::Connection,
     table: &str,

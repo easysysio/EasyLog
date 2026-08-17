@@ -1,0 +1,81 @@
+{# raw.html — the original log lines behind a dashboard, newest first.
+   Shown when a dashboard is switched to ?view=raw; the range, filters and
+   search still apply, so these are exactly the events the charts summarised.
+   Context comes from web/rawview.rs plus the calling renderer. #}
+{% extends "base.html" %}
+{% block title %}{{ type_label }} — raw — EasyLog{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0"><i class="bi bi-card-text me-2"></i>{{ type_label }} <span class="text-secondary">raw</span></h1>
+  <div class="d-flex gap-2">
+    <a href="{{ download_href }}" class="btn btn-sm btn-outline-secondary"
+       title="Download every line matching these filters">
+      <i class="bi bi-download me-1"></i>Download</a>
+    <a href="{{ dashboard_href }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-bar-chart me-1"></i>Dashboard</a>
+  </div>
+</div>
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-clock-history me-1"></i>Range</span>
+  <div class="btn-group btn-group-sm" role="group" aria-label="Time range">
+    {% for r in range_options %}
+    <a href="{{ r.href }}" class="btn btn-outline-primary {% if r.active %}active{% endif %}">{{ r.label }}</a>
+    {% endfor %}
+  </div>
+  <form class="d-flex ms-auto" method="get" action="{{ base }}" role="search">
+    {% for f in search_fields %}<input type="hidden" name="{{ f.name }}" value="{{ f.value }}">{% endfor %}
+    <input type="hidden" name="view" value="raw">
+    <div class="input-group input-group-sm" style="width:22rem;max-width:100%">
+      <span class="input-group-text"><i class="bi bi-search"></i></span>
+      <input class="form-control" type="search" name="q" value="{{ search }}"
+             placeholder="{{ search_placeholder }}" aria-label="Search">
+      <button class="btn btn-outline-primary" type="submit">Search</button>
+    </div>
+  </form>
+</div>
+
+{% if has_filters %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-funnel me-1"></i>Filters</span>
+  {% for c in chips %}
+  <a href="{{ c.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
+    {{ c.label }} <i class="bi bi-x-lg ms-1"></i>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if raw_shown == 0 %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+      No log lines match the current range and filters.
+    </div>
+  </div>
+{% else %}
+<div class="card">
+  <div class="card-body">
+    <h6 class="section-title mb-3">
+      <i class="bi bi-list-ul me-1"></i>{{ raw_shown }} newest line{{ raw_shown | pluralize }}
+      <span class="text-secondary">({{ range_label }})</span>
+    </h6>
+    <div class="raw-lines">
+      {% for r in raw_rows %}
+      <div class="raw-line">
+        <span class="raw-ts" data-ts-utc="{{ r.ts }}">{{ r.ts }}</span>
+        <span class="raw-text">{{ r.line }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% if raw_has_more %}
+<div class="text-center mt-3">
+  <a href="{{ more_href }}" class="btn btn-sm btn-outline-primary">
+    <i class="bi bi-arrow-down-circle me-1"></i>Load more</a>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

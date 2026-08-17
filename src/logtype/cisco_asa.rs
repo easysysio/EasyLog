@@ -125,7 +125,7 @@ fn text(caps: &regex::Captures, name: &str) -> String {
 // ─────────────────────────────────────────────────────────────────────────────
 #[cfg(test)]
 pub fn parse_line(line: &str) -> Option<FirewallEvent> {
-    parse_event(line, None)
+    parse_event(line, None).map(|(event, _)| event)
 }
 
 // Extracts the six-digit message ID from a "%ASA-4-106023" style tag.
@@ -143,7 +143,7 @@ fn id_from_tag(tag: &str) -> Option<String> {
 // syslog_loose reads "%ASA-4-106023:" as the syslog APP-NAME and strips it —
 // in the envelope tag. Both are accepted, inline first.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn parse_event(body: &str, tag: Option<&str>) -> Option<FirewallEvent> {
+pub fn parse_event(body: &str, tag: Option<&str>) -> Option<(FirewallEvent, String)> {
     let line = body.trim();
     let (id, body, ts) = match tag_regex().captures(line) {
         Some(c) => {
@@ -154,6 +154,12 @@ pub fn parse_event(body: &str, tag: Option<&str>) -> Option<FirewallEvent> {
             (c["id"].to_string(), c["body"].trim().to_string(), ts)
         }
         None => (id_from_tag(tag?)?, line.to_string(), None),
+    };
+    // What to store: the message as sent, with the tag syslog stripped put back
+    // when it was, so the raw view shows a complete ASA message.
+    let stored = match tag {
+        Some(t) if !line.contains("%") => format!("{}: {}", t.trim_end_matches(':'), line),
+        _ => line.to_string(),
     };
     let body = body.as_str();
 
@@ -233,7 +239,7 @@ pub fn parse_event(body: &str, tag: Option<&str>) -> Option<FirewallEvent> {
         }
         _ => return None,
     };
-    Some(event)
+    Some((event, stored))
 }
 
 impl LogType for CiscoAsa {
@@ -258,10 +264,10 @@ impl LogType for CiscoAsa {
     }
 
     fn ingest(&self, raw: &str, meta: &Meta, conn: &Connection) -> Result<bool> {
-        let Some(event) = parse_event(raw, meta.tag.as_deref()) else {
+        let Some((event, line)) = parse_event(raw, meta.tag.as_deref()) else {
             return Ok(false);
         };
-        firewall::insert(conn, "cisco_asa", &event, meta, raw)?;
+        firewall::insert(conn, "cisco_asa", &event, meta, &line)?;
         Ok(true)
     }
 }
@@ -349,10 +355,12 @@ mod tests {
         // from the body, so the ID has to come from the envelope.
         let body = r#"Deny tcp src outside:203.0.113.9/45678 dst inside:10.0.0.5/443 by access-group "outside_access_in""#;
         assert!(parse_event(body, None).is_none(), "no ID anywhere: not ours to parse");
-        let e = parse_event(body, Some("%ASA-4-106023")).expect("should parse via the tag");
+        let (e, line) = parse_event(body, Some("%ASA-4-106023")).expect("should parse via the tag");
         assert_eq!(e.action, Action::Deny);
         assert_eq!(e.src_ip, "203.0.113.9");
         assert_eq!(e.event_type, "106023");
+        // Stored with its tag restored, so the raw view shows a full message.
+        assert!(line.starts_with("%ASA-4-106023: Deny tcp"), "stored line was {line}");
 
         // An ID we don't report on stays ignored even when the body would match.
         assert!(parse_event(body, Some("%ASA-6-605005")).is_none());

@@ -42,6 +42,7 @@ mod haproxy;
 mod nginx;
 mod panos;
 mod proxy;
+mod rawview;
 mod traefik;
 
 // Web assets compiled into the binary so the UI is served with no static/
