@@ -29,6 +29,18 @@
     <a href="{{ r.href }}" class="btn btn-outline-primary {% if r.active %}active{% endif %}">{{ r.label }}</a>
     {% endfor %}
   </div>
+  {# Search narrows everything on the page — KPIs, charts, panels and the map —
+     and keeps whatever filters are already active via the hidden fields. #}
+  <form class="d-flex ms-auto" method="get" action="{{ base }}" role="search">
+    {% for f in search_fields %}<input type="hidden" name="{{ f.name }}" value="{{ f.value }}">{% endfor %}
+    <div class="input-group input-group-sm" style="width:22rem;max-width:100%">
+      <span class="input-group-text"><i class="bi bi-search"></i></span>
+      <input class="form-control" type="search" name="q" value="{{ search }}"
+             placeholder="{{ search_placeholder }}" aria-label="Search">
+      {% if search %}<a class="btn btn-outline-secondary" href="{{ base }}" title="Clear search"><i class="bi bi-x-lg"></i></a>{% endif %}
+      <button class="btn btn-outline-primary" type="submit">Search</button>
+    </div>
+  </form>
 </div>
 
 {% if has_filters %}

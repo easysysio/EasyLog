@@ -26,6 +26,7 @@ const SPEC: Spec = Spec {
     icon: "bi-shuffle",
     badge: "HTTP log",
     hint: "set `option httplog` and forward its syslog output",
+    search: &["remote_host", "path", "country", "frontend", "backend", "server"],
     extra: &[
         ExtraDim { key: "backend", title: "Top backends", icon: "bi-hdd-stack", chip: "Backend" },
         ExtraDim { key: "server", title: "Top servers", icon: "bi-server", chip: "Server" },

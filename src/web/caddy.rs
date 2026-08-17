@@ -27,6 +27,7 @@ const SPEC: Spec = Spec {
     icon: "bi-shield-check",
     badge: "JSON access log",
     hint: "enable `log { format json }` and forward its access log over syslog",
+    search: &["remote_host", "path", "user_agent", "referer", "host", "country"],
     extra: &[],
 };
 

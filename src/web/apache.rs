@@ -41,7 +41,21 @@ pub(crate) struct Filter {
     country: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     range: Option<String>,
+    /// Free-text search across the columns in SEARCH_COLUMNS.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    q: Option<String>,
 }
+
+// Columns the search box looks in. Substring, case-insensitive: typing part of
+// an address, a path or an agent finds it.
+const SEARCH_COLUMNS: [&str; 6] = [
+    "remote_host",
+    "path",
+    "user_agent",
+    "referer",
+    "method",
+    "country",
+];
 
 impl Filter {
     // Trim string fields, drop empties, and reject an unknown range (→ default).
@@ -54,7 +68,25 @@ impl Filter {
             status: self.status,
             country: clean(self.country),
             range,
+            q: clean(self.q),
         }
+    }
+
+    // The active filter minus the search term, as form fields — so submitting
+    // the search box keeps the range and any drill-down instead of dropping it.
+    fn hidden_fields(&self) -> Vec<HiddenField> {
+        let without_q = Filter { q: None, ..self.clone() };
+        serde_urlencoded::to_string(&without_q)
+            .ok()
+            .and_then(|s| serde_urlencoded::from_str::<Vec<(String, String)>>(&s).ok())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(name, value)| HiddenField { name, value })
+            .collect()
+    }
+
+    fn without_q(&self) -> Filter {
+        Filter { q: None, ..self.clone() }
     }
 
     // Serialize back to a `<base>?...` URL (values percent-encoded by serde).
@@ -126,6 +158,15 @@ impl Filter {
             "1y" => Duration::days(365),
             _ => Duration::hours(24),
         };
+        // Free text matches any searchable column; the term is bound once per
+        // column so it can never be interpolated into the SQL.
+        if let Some(q) = &self.q {
+            let ors: Vec<String> = SEARCH_COLUMNS.iter().map(|c| format!("{c} ILIKE ?")).collect();
+            conds.push(format!("({})", ors.join(" OR ")));
+            for _ in SEARCH_COLUMNS {
+                vals.push(Value::Text(format!("%{q}%")));
+            }
+        }
         let cutoff = (Utc::now() - dur).format("%Y-%m-%d %H:%M:%S").to_string();
         conds.push("ts >= CAST(? AS TIMESTAMP)".to_string());
         vals.push(Value::Text(cutoff));
@@ -162,6 +203,13 @@ struct RangeOpt {
     label: String,
     href: String,
     active: bool,
+}
+
+// One preserved filter value, rendered as a hidden input in the search form.
+#[derive(Serialize)]
+struct HiddenField {
+    name: String,
+    value: String,
 }
 
 // An active-filter pill: its label and the URL that removes just that filter.
@@ -356,6 +404,9 @@ pub(crate) fn render(
     if let Some(country) = &filter.country {
         chips.push(Chip { label: format!("Country: {country}"), remove: filter.without_country().href(base) });
     }
+    if let Some(q) = &filter.q {
+        chips.push(Chip { label: format!("Search: {q}"), remove: filter.without_q().href(base) });
+    }
 
     let mut ctx = tera::Context::new();
     ctx.insert("active", table);
@@ -374,6 +425,9 @@ pub(crate) fn render(
     ctx.insert("top_countries", &top_countries);
     ctx.insert("map", &map);
     ctx.insert("chips", &chips);
+    ctx.insert("search", &filter.q.clone().unwrap_or_default());
+    ctx.insert("search_fields", &filter.hidden_fields());
+    ctx.insert("search_placeholder", "Search URL, client IP, agent…");
     ctx.insert("range_options", &range_options);
     ctx.insert("range_label", range_label(&range));
     ctx.insert("has_filters", &!chips.is_empty());

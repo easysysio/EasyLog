@@ -56,6 +56,10 @@ pub(crate) struct Spec {
     /// Sentence completing the empty state, telling the user what to forward.
     pub hint: &'static str,
     pub extra: &'static [ExtraDim],
+    /// Columns the search box matches against. Listed per type rather than
+    /// shared, because these tables genuinely differ — HAProxy logs no user
+    /// agent, and only the JSON types record the requested host.
+    pub search: &'static [&'static str],
 }
 
 // Drill-down + time-range filter. The extra dimensions of every supported type
@@ -81,6 +85,16 @@ pub(crate) struct Filter {
     server: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     range: Option<String>,
+    /// Free-text search across this type's searchable columns.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    q: Option<String>,
+}
+
+// One preserved filter value, rendered as a hidden input in the search form.
+#[derive(Serialize)]
+struct HiddenField {
+    name: String,
+    value: String,
 }
 
 impl Filter {
@@ -97,7 +111,25 @@ impl Filter {
             backend: clean(self.backend),
             server: clean(self.server),
             range,
+            q: clean(self.q),
         }
+    }
+
+    // The active filter minus the search term, as form fields — so submitting
+    // the search box keeps the range and any drill-down instead of dropping it.
+    fn hidden_fields(&self) -> Vec<HiddenField> {
+        let without_q = Filter { q: None, ..self.clone() };
+        serde_urlencoded::to_string(&without_q)
+            .ok()
+            .and_then(|s| serde_urlencoded::from_str::<Vec<(String, String)>>(&s).ok())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(name, value)| HiddenField { name, value })
+            .collect()
+    }
+
+    fn without_q(&self) -> Filter {
+        Filter { q: None, ..self.clone() }
     }
 
     // Serialize back to a `<base>?...` URL (values percent-encoded by serde).
@@ -166,7 +198,8 @@ impl Filter {
 
     // SQL conditions + bound values for the active filter and time window, using
     // only the extra dimensions this type declares.
-    fn sql(&self, extra: &[ExtraDim]) -> (Vec<String>, Vec<Value>) {
+    fn sql(&self, spec: &Spec) -> (Vec<String>, Vec<Value>) {
+        let extra = spec.extra;
         let mut conds = Vec::new();
         let mut vals = Vec::new();
         if let Some(ip) = &self.ip {
@@ -198,6 +231,15 @@ impl Filter {
             "1y" => Duration::days(365),
             _ => Duration::hours(24),
         };
+        // Free text matches any searchable column; the term is bound once per
+        // column so it can never be interpolated into the SQL.
+        if let Some(q) = &self.q {
+            let ors: Vec<String> = spec.search.iter().map(|c| format!("{c} ILIKE ?")).collect();
+            conds.push(format!("({})", ors.join(" OR ")));
+            for _ in spec.search {
+                vals.push(Value::Text(format!("%{q}%")));
+            }
+        }
         let cutoff = (Utc::now() - dur).format("%Y-%m-%d %H:%M:%S").to_string();
         conds.push("ts >= CAST(? AS TIMESTAMP)".to_string());
         vals.push(Value::Text(cutoff));
@@ -262,7 +304,7 @@ pub(crate) fn render(
     let table = spec.table;
     let base = spec.base;
     let range = filter.range_key().to_string();
-    let (conds, vals) = filter.sql(spec.extra);
+    let (conds, vals) = filter.sql(spec);
     let where_clause = build_where(&conds);
 
     let conn = state.db.lock().expect("db mutex poisoned");
@@ -449,6 +491,9 @@ pub(crate) fn render(
     if let Some(country) = &filter.country {
         chips.push(Chip { label: format!("Country: {country}"), remove: filter.without_country().href(base) });
     }
+    if let Some(q) = &filter.q {
+        chips.push(Chip { label: format!("Search: {q}"), remove: filter.without_q().href(base) });
+    }
 
     let mut ctx = tera::Context::new();
     ctx.insert("active", spec.table);
@@ -471,6 +516,9 @@ pub(crate) fn render(
     ctx.insert("extra_panels", &extra_panels);
     ctx.insert("map", &map);
     ctx.insert("chips", &chips);
+    ctx.insert("search", &filter.q.clone().unwrap_or_default());
+    ctx.insert("search_fields", &filter.hidden_fields());
+    ctx.insert("search_placeholder", "Search URL, client IP, agent…");
     ctx.insert("range_options", &range_options);
     ctx.insert("range_label", range_label(&range));
     ctx.insert("has_filters", &!chips.is_empty());

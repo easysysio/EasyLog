@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Search on every dashboard.** A search box next to the time-range selector
+  matches free text across the fields that dashboard cares about — URL, client
+  IP, user agent, referer and host on the web types (plus routers/services or
+  backends/servers), and source, destination, port, rule, application, zone and
+  protocol on the firewalls. Matching is case-insensitive substring, so
+  `203.0.113` finds a subnet and `/admin` finds every path containing it.
+  Search is part of the filter set: it narrows the KPIs, timeline, panels and
+  world map alike, composes with the range and any drill-down, shows as a
+  removable chip, and is carried in the URL so a search is shareable.
+
+### Fixed
+- **Firewall tables now gain new columns on upgrade.** `CREATE TABLE IF NOT
+  EXISTS` doesn't add columns to a table that already exists, so a database
+  created by an earlier build was missing `application` and failed any query
+  touching it. The column is now added explicitly, as the web tables already do.
+
 ## [0.5.0] — 2026-08-16
 
 ### Added

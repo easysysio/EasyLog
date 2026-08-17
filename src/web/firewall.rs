@@ -47,6 +47,20 @@ pub(crate) struct Spec {
     pub extra: &'static [ExtraDim],
 }
 
+// Columns the search box looks in. Ports are cast so that typing "443" finds
+// traffic to it, alongside addresses, rules, zones and applications.
+const SEARCH_COLUMNS: [&str; 9] = [
+    "src_ip",
+    "dst_ip",
+    "rule",
+    "application",
+    "protocol",
+    "src_zone",
+    "dst_zone",
+    "country",
+    "CAST(dst_port AS VARCHAR)",
+];
+
 // Drill-down + time-range filter shared by every firewall dashboard.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub(crate) struct Filter {
@@ -68,6 +82,16 @@ pub(crate) struct Filter {
     application: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     range: Option<String>,
+    /// Free-text search across SEARCH_COLUMNS.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    q: Option<String>,
+}
+
+// One preserved filter value, rendered as a hidden input in the search form.
+#[derive(Serialize)]
+struct HiddenField {
+    name: String,
+    value: String,
 }
 
 impl Filter {
@@ -85,7 +109,25 @@ impl Filter {
             country: clean(self.country),
             application: clean(self.application),
             range,
+            q: clean(self.q),
         }
+    }
+
+    // The active filter minus the search term, as form fields — so submitting
+    // the search box keeps the range and any drill-down instead of dropping it.
+    fn hidden_fields(&self) -> Vec<HiddenField> {
+        let without_q = Filter { q: None, ..self.clone() };
+        serde_urlencoded::to_string(&without_q)
+            .ok()
+            .and_then(|s| serde_urlencoded::from_str::<Vec<(String, String)>>(&s).ok())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(name, value)| HiddenField { name, value })
+            .collect()
+    }
+
+    fn without_q(&self) -> Filter {
+        Filter { q: None, ..self.clone() }
     }
 
     fn href(&self, base: &str) -> String {
@@ -206,6 +248,15 @@ impl Filter {
             "1y" => Duration::days(365),
             _ => Duration::hours(24),
         };
+        // Free text matches any searchable column; the term is bound once per
+        // column so it can never be interpolated into the SQL.
+        if let Some(q) = &self.q {
+            let ors: Vec<String> = SEARCH_COLUMNS.iter().map(|c| format!("{c} ILIKE ?")).collect();
+            conds.push(format!("({})", ors.join(" OR ")));
+            for _ in SEARCH_COLUMNS {
+                vals.push(Value::Text(format!("%{q}%")));
+            }
+        }
         let cutoff = (Utc::now() - dur).format("%Y-%m-%d %H:%M:%S").to_string();
         conds.push("ts >= CAST(? AS TIMESTAMP)".to_string());
         vals.push(Value::Text(cutoff));
@@ -445,6 +496,9 @@ pub(crate) fn render(
     if let Some(country) = &filter.country {
         chips.push(Chip { label: format!("Country: {country}"), remove: filter.without_country().href(base) });
     }
+    if let Some(q) = &filter.q {
+        chips.push(Chip { label: format!("Search: {q}"), remove: filter.without_q().href(base) });
+    }
 
     let mut ctx = tera::Context::new();
     ctx.insert("active", spec.table);
@@ -468,6 +522,9 @@ pub(crate) fn render(
     ctx.insert("extra_panels", &extra_panels);
     ctx.insert("map", &map);
     ctx.insert("chips", &chips);
+    ctx.insert("search", &filter.q.clone().unwrap_or_default());
+    ctx.insert("search_fields", &filter.hidden_fields());
+    ctx.insert("search_placeholder", "Search source, destination, rule…");
     ctx.insert("range_options", &range_options);
     ctx.insert("range_label", range_label(&range));
     ctx.insert("has_filters", &!chips.is_empty());

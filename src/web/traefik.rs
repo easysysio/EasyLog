@@ -26,6 +26,7 @@ const SPEC: Spec = Spec {
     icon: "bi-diagram-3",
     badge: "JSON access log",
     hint: "forward its JSON access log over syslog",
+    search: &["remote_host", "path", "user_agent", "host", "country", "router", "service"],
     extra: &[
         ExtraDim { key: "router", title: "Top routers", icon: "bi-signpost-2", chip: "Router" },
         ExtraDim { key: "service", title: "Top services", icon: "bi-hdd-stack", chip: "Service" },

@@ -88,6 +88,9 @@ pub fn init_schema(conn: &Connection, table: &str) -> Result<()> {
             received_at  TIMESTAMP,
             raw          VARCHAR
         );
+        -- Columns added after a table may already exist in the field: CREATE
+        -- TABLE IF NOT EXISTS won't add them, so each one is applied explicitly.
+        ALTER TABLE {table} ADD COLUMN IF NOT EXISTS application VARCHAR;
         "#
     ))?;
     Ok(())

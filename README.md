@@ -30,6 +30,10 @@ parsed events in an embedded **DuckDB** column store, and serves a live
   breakdowns, and top-N tables, rendered server-side. **Click any client IP,
   URL, status code, or country to drill down** — filters stack and are shareable
   by URL.
+- 🔎 **Search on every dashboard** — one box that matches across that type's
+  fields (URL, client IP, agent, host; or source, destination, port, rule,
+  application). It narrows everything on the page, composes with the active
+  filters, and lives in the URL.
 - 🌍 **IP geolocation, fully offline** — every client IP is resolved to a country
   at ingest, powering a Countries KPI, Top-countries panels, a country breakdown
   on the overview, and a **shaded world map** on every dashboard that you can
