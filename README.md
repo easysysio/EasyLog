@@ -62,6 +62,9 @@ Supported log types:
   **Traefik** (JSON access logs).
 * **Firewalls** — **Cisco ASA** (syslog message IDs) and **Palo Alto / PAN-OS**
   (TRAFFIC logs), on a dashboard built around the allow/deny split.
+* **General** — anything else. Lines are stored exactly as received, with no
+  parsing, so a device EasyLog has no parser for is still collected and
+  searchable.
 
 Each type has its own dashboard, grouped by category in the navigation.
 

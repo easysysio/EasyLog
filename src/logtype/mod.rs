@@ -22,6 +22,7 @@ pub mod apache;
 pub mod caddy;
 pub mod cisco_asa;
 pub mod firewall;
+pub mod general;
 pub mod haproxy;
 pub mod nginx;
 pub mod panos;
@@ -40,6 +41,11 @@ pub struct Meta {
     /// message ID here, and syslog_loose strips it from the body, so parsers
     /// that need it read it from the envelope.
     pub tag: Option<String>,
+    /// The message as the sender wrote it, with the syslog tag put back in
+    /// front — syslog_loose strips it into `tag`, which loses the first word of
+    /// any line whose leading token merely looked like one. Parsers take the
+    /// stripped body; the general type stores this.
+    pub body: String,
     /// Time EasyLog received the message.
     pub received_at: DateTime<Utc>,
 }
@@ -51,19 +57,23 @@ pub struct Meta {
 pub enum Category {
     Web,
     Firewall,
+    /// Logs kept without a parser — see logtype/general.rs.
+    General,
     ThirdParty,
 }
 
 impl Category {
     /// Every category, in display order. A category with no registered types is
     /// skipped when the navigation is built, so this can list planned ones.
-    pub const ALL: [Category; 3] = [Category::Web, Category::Firewall, Category::ThirdParty];
+    pub const ALL: [Category; 4] =
+        [Category::Web, Category::Firewall, Category::General, Category::ThirdParty];
 
     /// URL segment, e.g. "web" in /web/apache.
     pub fn slug(self) -> &'static str {
         match self {
             Category::Web => "web",
             Category::Firewall => "firewall",
+            Category::General => "general",
             Category::ThirdParty => "third-party",
         }
     }
@@ -72,6 +82,7 @@ impl Category {
         match self {
             Category::Web => "Web",
             Category::Firewall => "Firewalls",
+            Category::General => "General",
             Category::ThirdParty => "3rd parties",
         }
     }
@@ -80,6 +91,7 @@ impl Category {
         match self {
             Category::Web => "bi-globe2",
             Category::Firewall => "bi-shield-lock",
+            Category::General => "bi-journal-text",
             Category::ThirdParty => "bi-puzzle",
         }
     }
@@ -154,6 +166,8 @@ impl Registry {
         types.insert(cisco_asa.name(), Box::new(cisco_asa));
         let panos = panos::PanOs;
         types.insert(panos.name(), Box::new(panos));
+        let general = general::General;
+        types.insert(general.name(), Box::new(general));
         Registry { types }
     }
 

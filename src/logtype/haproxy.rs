@@ -275,6 +275,7 @@ mod tests {
             source_ip: "192.168.1.30".into(),
             hostname: None,
             tag: None,
+            body: String::new(),
             received_at: Utc::now(),
         };
         assert!(HAProxy.ingest(LINE, &meta, &conn).unwrap());

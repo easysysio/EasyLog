@@ -256,6 +256,7 @@ mod tests {
             source_ip: "192.168.1.2".into(),
             hostname: None,
             tag: None,
+            body: String::new(),
             received_at: Utc::now(),
         };
         assert!(PanOs.ingest(TRAFFIC, &meta, &conn).unwrap());

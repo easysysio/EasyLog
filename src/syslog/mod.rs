@@ -290,10 +290,25 @@ fn enqueue(state: &Arc<AppState>, tx: &mpsc::Sender<WorkItem>, ip: IpAddr, line:
         return;
     };
 
+    // Rebuild what followed the syslog header by slicing the original line from
+    // where the tag starts — searching after the hostname so a host and tag with
+    // the same name can't confuse it. Falls back to the stripped message.
+    let tag = msg.appname.map(|a| a.to_string());
+    let body = {
+        let after_host = hostname
+            .as_ref()
+            .and_then(|h| line.find(h.as_str()).map(|i| i + h.len()))
+            .unwrap_or(0);
+        tag.as_ref()
+            .and_then(|t| line[after_host..].find(t.as_str()).map(|i| line[after_host + i..].to_string()))
+            .unwrap_or_else(|| msg.msg.to_string())
+    };
+
     let meta = Meta {
         source_ip: ip_str,
         hostname,
-        tag: msg.appname.map(|a| a.to_string()),
+        tag,
+        body,
         received_at: Utc::now(),
     };
 

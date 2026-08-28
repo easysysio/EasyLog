@@ -1,0 +1,150 @@
+{# general.html — dashboard for general (unparsed) logs: volume over time, who is
+   sending, and the lines themselves via the Raw view. There are no parsed fields
+   to chart, so this stays deliberately thin (see web/general.rs). #}
+{% extends "base.html" %}
+{% block title %}{{ type_label }} — EasyLog{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0"><i class="bi bi-journal-text me-2"></i>{{ type_label }}</h1>
+  <span class="badge text-bg-secondary">stored unparsed</span>
+</div>
+
+{% if not has_data %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+      No general logs yet. Add a <a href="/sources">source</a> with the
+      <strong>General logs</strong> type and forward anything over syslog —
+      every line is kept as it arrives, parser or no parser.
+    </div>
+  </div>
+{% else %}
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-clock-history me-1"></i>Range</span>
+  <div class="btn-group btn-group-sm" role="group" aria-label="Time range">
+    {% for r in range_options %}
+    <a href="{{ r.href }}" class="btn btn-outline-primary {% if r.active %}active{% endif %}">{{ r.label }}</a>
+    {% endfor %}
+  </div>
+  <form class="d-flex ms-auto" method="get" action="{{ base }}" role="search">
+    {% for f in search_fields %}<input type="hidden" name="{{ f.name }}" value="{{ f.value }}">{% endfor %}
+    <div class="input-group input-group-sm" style="width:22rem;max-width:100%">
+      <span class="input-group-text"><i class="bi bi-search"></i></span>
+      <input class="form-control" type="search" name="q" value="{{ search }}"
+             placeholder="{{ search_placeholder }}" aria-label="Search">
+      <button class="btn btn-outline-primary" type="submit">Search</button>
+    </div>
+  </form>
+  <a href="{{ raw_href }}" class="btn btn-sm btn-outline-secondary"
+     title="Show the raw log lines for these filters">
+    <i class="bi bi-card-text me-1"></i>Raw</a>
+</div>
+
+{% if has_filters %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-funnel me-1"></i>Filters</span>
+  {% for c in chips %}
+  <a href="{{ c.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
+    {{ c.label }} <i class="bi bi-x-lg ms-1"></i>
+  </a>
+  {% endfor %}
+  <a href="{{ base }}" class="small text-decoration-none ms-1">Clear all</a>
+</div>
+{% endif %}
+
+{% if kpis.events == 0 %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-search fs-2 d-block mb-2"></i>
+      No lines match the current range and filters.
+    </div>
+  </div>
+{% else %}
+
+<div class="row row-cols-2 row-cols-lg-4 g-3 mb-4">
+  <div class="col"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-list-ul me-1"></i>Lines</h6>
+    <div class="stat-value">{{ kpis.events }}</div>
+  </div></div></div>
+  <div class="col"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-hdd-network me-1"></i>Senders</h6>
+    <div class="stat-value">{{ kpis.senders }}</div>
+  </div></div></div>
+  <div class="col"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-pc-display me-1"></i>Hostnames</h6>
+    <div class="stat-value">{{ kpis.hosts }}</div>
+  </div></div></div>
+  <div class="col"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-2"><i class="bi bi-tag me-1"></i>Tags</h6>
+    <div class="stat-value">{{ kpis.tags }}</div>
+  </div></div></div>
+</div>
+
+<div class="card mb-4"><div class="card-body">
+  <h6 class="section-title mb-3"><i class="bi bi-bar-chart-line me-1"></i>Lines over time
+    <span class="text-secondary">({{ range_label }})</span></h6>
+  <div class="tl-chart" data-tl-gran="{{ tl_gran }}">
+    <div class="tl-yaxis"><div>{{ timeline_max }}</div><div>{{ timeline_mid }}</div><div>0</div></div>
+    <div class="tl-plot">
+      <div class="tl-bars">
+        {% for b in timeline %}
+        <div class="col" data-ts="{{ b.ts_epoch }}" data-count="{{ b.count }}">
+          <div class="bar bg-primary" style="height:{{ b.pct }}%" data-bs-toggle="tooltip"
+               title="{{ b.label }} — {{ b.count }}"></div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="tl-xaxis">
+        {% for b in timeline %}<div class="xl" data-ts="{{ b.ts_epoch }}">{{ b.label }}</div>{% endfor %}
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<div class="row g-4">
+  <div class="col-lg-4"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-hdd-network me-1"></i>Top senders <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in top_senders %}
+      <tr>
+        <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
+  <div class="col-lg-4"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-pc-display me-1"></i>Top hostnames <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in top_hosts %}
+      <tr>
+        <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
+  <div class="col-lg-4"><div class="card h-100"><div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-tag me-1"></i>Top tags <span class="text-secondary">(click to filter)</span></h6>
+    <table class="table table-sm table-hover align-middle mb-0"><tbody>
+      {% for r in top_tags %}
+      <tr>
+        <td class="font-monospace small truncate w-50"><a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a></td>
+        <td class="w-50"><div class="progress" style="height:14px"><div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div></div></td>
+        <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+  </div></div></div>
+</div>
+
+<p class="text-secondary small mt-4 mb-0">
+  <i class="bi bi-info-circle me-1"></i>These lines are stored exactly as received — no parsing, so no
+  status codes, countries or durations to chart. Use <strong>Raw</strong> to read them.
+</p>
+{% endif %}
+{% endif %}
+{% endblock %}

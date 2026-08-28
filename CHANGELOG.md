@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **General logs — a type that keeps the line, unparsed.** Point a source at
+  **General logs** and every message is stored exactly as it arrives, whatever
+  the format: no parser, nothing dropped. Its dashboard answers what the data
+  can — lines over time, top senders, hostnames and tags — and hands the rest to
+  the Raw view, with search covering the message text itself. It sits in a new
+  **General** navigation category. Unregistered hosts and lines a typed parser
+  rejects are still dropped: this is a type you choose, not a catch-all.
+
+### Fixed
+- **General logs keep the whole line.** A syslog parser takes the first token
+  after the hostname as the tag, so a line whose first word only looked like one
+  ("a bare line…") arrived missing that word. The envelope now carries the
+  message with its tag restored, and that is what the general type stores.
+
 ## [0.6.1] — 2026-08-17
 
 ### Fixed

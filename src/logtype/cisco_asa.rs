@@ -377,6 +377,7 @@ mod tests {
             source_ip: "192.168.1.1".into(),
             hostname: None,
             tag: None,
+            body: String::new(),
             received_at: Utc::now(),
         };
         let line = r#"%ASA-4-106023: Deny tcp src outside:203.0.113.9/45678 dst inside:10.0.0.5/443 by access-group "outside_access_in""#;
