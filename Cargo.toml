@@ -23,7 +23,7 @@ toml = "0.8"
 anyhow = "1"
 chrono = "0.4"
 tera = "1"
-maxminddb = "0.24"
+maxminddb = "0.30"
 tracing-appender = "0.2"
 tokio-stream = "0.1"
 

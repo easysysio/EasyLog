@@ -72,22 +72,20 @@ pub fn lookup(ip: &str) -> (String, String) {
     let Some(Some(reader)) = READER.get().map(Option::as_ref) else {
         return (String::new(), "Unknown".to_string());
     };
-    match reader.lookup::<geoip2::Country>(addr) {
-        Ok(rec) => {
-            let country = rec.country.as_ref();
-            let code = country.and_then(|c| c.iso_code).unwrap_or("").to_string();
-            let name = country
-                .and_then(|c| c.names.as_ref())
-                .and_then(|n| n.get("en").copied())
-                .unwrap_or("Unknown")
-                .to_string();
-            if code.is_empty() {
-                (String::new(), "Unknown".to_string())
-            } else {
-                (code, name)
-            }
-        }
-        Err(_) => (String::new(), "Unknown".to_string()),
+    // maxminddb hands back a handle first, then decodes on demand; an address
+    // outside the database decodes to None.
+    let Ok(found) = reader.lookup(addr) else {
+        return (String::new(), "Unknown".to_string());
+    };
+    let Ok(Some(record)) = found.decode::<geoip2::Country>() else {
+        return (String::new(), "Unknown".to_string());
+    };
+    match record.country.iso_code {
+        Some(code) if !code.is_empty() => (
+            code.to_string(),
+            record.country.names.english.unwrap_or("Unknown").to_string(),
+        ),
+        _ => (String::new(), "Unknown".to_string()),
     }
 }
 

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Dependency advisories cleared (`cargo audit` reports none).** `maxminddb`
+  moves 0.24 → 0.30 for RUSTSEC-2025-0132 (its `open_mmap` marked an unsafe
+  memory-mapping operation as safe — EasyLog never called it, opening the
+  database by read or from the embedded bytes, so this was not exploitable
+  here), and the remaining advisories were in transitive crates cleared by
+  refreshing the lock: `crossbeam-epoch` (RUSTSEC-2026-0204) via tera, plus
+  `anyhow`'s unsoundness warning (RUSTSEC-2026-0190). Two more — `quinn-proto`
+  (RUSTSEC-2026-0185) and `rkyv` (RUSTSEC-2026-0235) — were stale lock entries
+  for crates nothing actually built, and are gone with the refresh: the
+  dependency count drops from 349 to 271.
+
 ## [0.7.1] — 2026-08-28
 
 ### Fixed
