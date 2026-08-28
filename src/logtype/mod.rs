@@ -131,6 +131,13 @@ pub trait LogType: Send + Sync {
     /// Bootstrap icon class for the navigation entry.
     fn icon(&self) -> &'static str;
 
+    /// Whether this type's table carries `country` / `country_code`. Types that
+    /// resolve a client address do; general logs have no address to resolve, so
+    /// the overview must not ask their table for those columns.
+    fn has_geo(&self) -> bool {
+        true
+    }
+
     /// Create this type's table(s) if they do not already exist.
     fn init_schema(&self, conn: &Connection) -> Result<()>;
 

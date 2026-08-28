@@ -47,6 +47,12 @@ impl LogType for General {
     // parser there is no event timestamp to trust, and retention needs a column
     // to age rows by.
     // ─────────────────────────────────────────────────────────────────────────
+    // No client address is parsed out of an arbitrary line, so there is nothing
+    // to geolocate and the table has no country columns.
+    fn has_geo(&self) -> bool {
+        false
+    }
+
     fn init_schema(&self, conn: &Connection) -> Result<()> {
         conn.execute_batch(
             r#"

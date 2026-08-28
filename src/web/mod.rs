@@ -379,15 +379,7 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
     // overview reads them as one union rather than querying each table
     // separately: three scans total instead of four per registered type, which
     // matters as vendors are added.
-    let union_sql = state
-        .registry
-        .names()
-        .iter()
-        .map(|name| {
-            format!("SELECT '{name}' AS log_type, source_ip, ts, country, country_code FROM {name}")
-        })
-        .collect::<Vec<_>>()
-        .join(" UNION ALL ");
+    let union_sql = overview_union(&state.registry);
 
     {
         let conn = state.db.lock().expect("db mutex poisoned");
@@ -492,6 +484,28 @@ async fn home(State(state): State<Arc<AppState>>) -> Result<Html<String>, AppErr
     ctx.insert("map", &map);
     ctx.insert("has_data", &(total > 0));
     Ok(Html(state.tera.render("index.html", &ctx)?))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// overview_union(registry)
+// Every log type's rows as one relation: type name, sender, time and country.
+// A type that stores no geolocation (general logs have no client address to
+// resolve) contributes NULLs rather than being asked for columns its table does
+// not have — which is what broke the overview when the first such type landed.
+// ─────────────────────────────────────────────────────────────────────────────
+fn overview_union(registry: &crate::logtype::Registry) -> String {
+    registry
+        .names()
+        .iter()
+        .map(|name| {
+            let geo = match registry.get(name).map(|t| t.has_geo()) {
+                Some(false) => "CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR)",
+                _ => "country, country_code",
+            };
+            format!("SELECT '{name}' AS log_type, source_ip, ts, {geo} FROM {name}")
+        })
+        .collect::<Vec<_>>()
+        .join(" UNION ALL ")
 }
 
 // One pie slice: label, count, percent (formatted), and colour.
@@ -703,5 +717,38 @@ impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         tracing::error!("request failed: {:#}", self.0);
         (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::logtype::Registry;
+
+    // The overview reads every registered table through one union, so a type
+    // whose table lacks a column the union selects takes the whole home page
+    // down with a binder error. Running it against the real schemas catches
+    // that the moment a type is added.
+    #[test]
+    fn the_overview_union_runs_against_every_registered_type() {
+        let registry = Registry::with_defaults();
+        let conn = duckdb::Connection::open_in_memory().unwrap();
+        registry.init_all(&conn).unwrap();
+
+        let sql = overview_union(&registry);
+        for query in [
+            format!("SELECT log_type, count(*) FROM ({sql}) GROUP BY log_type"),
+            format!("SELECT source_ip, count(*) FROM ({sql}) GROUP BY source_ip"),
+            format!(
+                "SELECT coalesce(nullif(country, ''), 'Unknown'), coalesce(country_code, ''), \
+                 count(*) FROM ({sql}) GROUP BY 1, 2"
+            ),
+        ] {
+            conn.prepare(&query)
+                .unwrap_or_else(|e| panic!("overview query failed: {e}\n{query}"))
+                .query_map([], |_| Ok(()))
+                .unwrap()
+                .for_each(drop);
+        }
     }
 }

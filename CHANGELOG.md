@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The overview returned an internal error once general logs existed.** The home
+  page reads every log type through a single union that selects `country` and
+  `country_code`, and the general table has neither — there is no client address
+  in an unparsed line to resolve — so DuckDB rejected the query and the page
+  500'd on any 0.7.0 install. A type now declares whether it stores geolocation,
+  and those that don't contribute NULLs: they still count towards the totals and
+  the by-type breakdown, and appear as "Unknown" in the country pie. Dashboards
+  and ingestion were unaffected.
+
 ## [0.7.0] — 2026-08-17
 
 ### Added
