@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-08-28
+
 ### Security
 - **Dependency advisories cleared (`cargo audit` reports none).** `maxminddb`
   moves 0.24 → 0.30 for RUSTSEC-2025-0132 (its `open_mmap` marked an unsafe
