@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Click a timeline bar to filter the dashboard to that period.** Every bar on
+  "Requests over time" is now a link: clicking the 2am bar bounds the whole page
+  — KPIs, charts, panels, world map, raw view and download — to 02:00–03:00, and
+  the timeline re-buckets *inside* that hour (five-minute bars) so a further
+  click narrows again, down to a minute. The window is a removable chip shown in
+  your browser's timezone, it composes with search and every drill-down filter,
+  and it lives in the URL (`?from=&to=`, epoch seconds) so a pinned view can be
+  shared. Picking a time range clears it. On all dashboards — web, firewall and
+  general — and in the raw view.
+
 ## [0.7.2] — 2026-08-28
 
 ### Security

@@ -11,6 +11,9 @@
 // Vendors supply a `Spec` describing their table, route and labelling, plus any
 // extra dimension they alone have (PAN-OS applications, say). Geolocation is on
 // the source address, so the world map shows where traffic is coming from.
+//
+// Range, drill-downs, search and the window pinned by clicking a timeline bar
+// (?from=&to=) all compose into one parameterized WHERE clause.
 // =============================================================================
 
 use std::sync::Arc;
@@ -82,6 +85,12 @@ pub(crate) struct Filter {
     application: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     range: Option<String>,
+    /// Pinned window from clicking a timeline bar: UTC epoch seconds, half-open
+    /// [from, to). When set it bounds the query instead of the range.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    from: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    to: Option<i64>,
     /// "raw" lists the matching log lines instead of the charts; "download"
     /// streams them as a file. Anything else renders the dashboard.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -117,9 +126,25 @@ impl Filter {
             application: clean(self.application),
             range,
             q: clean(self.q),
+            from: self.from,
+            to: self.to,
             view: clean(self.view),
             limit: self.limit,
         }
+    }
+
+    // The pinned window, if a timeline bar was clicked.
+    fn window(&self) -> Option<(i64, i64)> {
+        match (self.from, self.to) {
+            (Some(from), Some(to)) if to > from => Some((from, to)),
+            _ => None,
+        }
+    }
+    fn with_window(&self, from: i64, to: i64) -> Filter {
+        Filter { from: Some(from), to: Some(to), ..self.clone() }
+    }
+    fn without_window(&self) -> Filter {
+        Filter { from: None, to: None, ..self.clone() }
     }
     // Raw-view helpers: the toggle in and out, and the growing page size.
     fn view_key(&self) -> &str {
@@ -204,8 +229,9 @@ impl Filter {
     fn with_country(&self, v: &str) -> Filter {
         Filter { country: Some(v.to_string()), ..self.clone() }
     }
+    // Picking a range clears any pinned window — the two would contradict.
     fn with_range(&self, v: &str) -> Filter {
-        Filter { range: Some(v.to_string()), ..self.clone() }
+        Filter { range: Some(v.to_string()), from: None, to: None, ..self.clone() }
     }
     fn without_src(&self) -> Filter {
         Filter { src: None, ..self.clone() }
@@ -288,9 +314,20 @@ impl Filter {
                 vals.push(Value::Text(format!("%{q}%")));
             }
         }
-        let cutoff = (Utc::now() - dur).format("%Y-%m-%d %H:%M:%S").to_string();
-        conds.push("ts >= CAST(? AS TIMESTAMP)".to_string());
-        vals.push(Value::Text(cutoff));
+        // A pinned window (a clicked timeline bar) bounds the query; the range
+        // then only decides how the timeline is bucketed.
+        match self.window() {
+            Some((from, to)) => {
+                let (cond, bounds) = super::window_sql(from, to);
+                conds.push(cond);
+                vals.extend(bounds.into_iter().map(Value::Text));
+            }
+            None => {
+                let cutoff = (Utc::now() - dur).format("%Y-%m-%d %H:%M:%S").to_string();
+                conds.push("ts >= CAST(? AS TIMESTAMP)".to_string());
+                vals.push(Value::Text(cutoff));
+            }
+        }
         (conds, vals)
     }
 }
@@ -353,7 +390,7 @@ pub(crate) fn render(
     let where_clause = build_where(&conds);
 
 
-    let (range_options, chips) = furniture(&filter, spec, base, &range);
+    let (range_options, chips, window_chip) = furniture(&filter, spec, base, &range);
 
     // Raw mode reuses this dashboard's WHERE clause, so the lines listed are
     // exactly the events the charts summarise. Handled before the database lock
@@ -378,11 +415,12 @@ pub(crate) fn render(
         ctx.insert("chips", &chips);
         ctx.insert("range_options", &range_options);
         ctx.insert("range_label", range_label(&range));
-        ctx.insert("has_filters", &!chips.is_empty());
+        ctx.insert("window", &window_chip);
+        ctx.insert("has_filters", &(!chips.is_empty() || window_chip.is_some()));
         ctx.insert("search", &filter.q.clone().unwrap_or_default());
         ctx.insert("search_fields", &filter.hidden_fields());
         ctx.insert("search_placeholder", "Search source, destination, rule…");
-    ctx.insert("raw_href", &filter.with_view("raw").href(base));
+        ctx.insert("raw_href", &filter.with_view("raw").href(base));
         ctx.insert("dashboard_href", &filter.without_view().href(base));
         ctx.insert(
             "more_href",
@@ -436,7 +474,21 @@ pub(crate) fn render(
     };
 
     // Events over time, zero-filled across the whole range.
-    let (bucket_expr, tl_gran) = bucketing(&range);
+    // Pinned to a window, the timeline buckets inside it — clicking the 2am bar
+    // shows the minutes within that hour rather than one lone bar. Otherwise the
+    // range's own buckets apply.
+    let (series, bucket_expr, tl_gran) = match filter.window() {
+        Some((from, to)) => super::timeline_window(from, to),
+        None => {
+            let (expr, gran) = bucketing(&range);
+            (super::timeline_series(&range), expr.to_string(), gran)
+        }
+    };
+    let bucket_span = series
+        .windows(2)
+        .next()
+        .map(|w| w[1].0 - w[0].0)
+        .unwrap_or(60 * 60);
     let counts: std::collections::HashMap<i64, i64> = {
         let sql = format!(
             "SELECT CAST(epoch({bucket_expr}) AS BIGINT), count(*) FROM {table} {where_clause} \
@@ -448,21 +500,26 @@ pub(crate) fn render(
         })?
         .collect::<Result<std::collections::HashMap<i64, i64>, _>>()?
     };
-    let series = super::timeline_series(&range);
     let timeline_max = series
         .iter()
         .map(|(e, _)| counts.get(e).copied().unwrap_or(0))
         .max()
         .unwrap_or(0);
+    // Every bar links to its own window, so a click pins the dashboard to it and
+    // a further click narrows again.
     let timeline: Vec<Bar> = series
         .into_iter()
         .map(|(epoch, label)| {
             let count = counts.get(&epoch).copied().unwrap_or(0);
+            let end = match filter.window() {
+                Some((_, to)) => (epoch + bucket_span).min(to),
+                None => super::bucket_end(&range, epoch),
+            };
             Bar {
                 pct: pct(count, timeline_max),
                 count,
                 css: String::new(),
-                href: String::new(),
+                href: filter.with_window(epoch, end).href(base),
                 label,
                 ts_epoch: epoch,
             }
@@ -566,7 +623,8 @@ pub(crate) fn render(
     ctx.insert("raw_href", &filter.with_view("raw").href(base));
     ctx.insert("range_options", &range_options);
     ctx.insert("range_label", range_label(&range));
-    ctx.insert("has_filters", &!chips.is_empty());
+    ctx.insert("window", &window_chip);
+    ctx.insert("has_filters", &(!chips.is_empty() || window_chip.is_some()));
     ctx.insert("has_data", &(total_rows > 0));
     Ok(Html(state.tera.render("firewall.html", &ctx)?).into_response())
 }
@@ -574,7 +632,8 @@ pub(crate) fn render(
 // The furniture every view of this dashboard shares: the range selector and the
 // chips for whatever filters are active. Pure functions of the filter, so the
 // raw view can build them without touching the database.
-fn furniture(filter: &Filter, spec: &Spec, base: &str, range: &str) -> (Vec<RangeOpt>, Vec<Chip>) {
+fn furniture(filter: &Filter, spec: &Spec, base: &str, range: &str)
+-> (Vec<RangeOpt>, Vec<Chip>, Option<super::WindowChip>) {
     let range_defs = [("1h", "Hour"), ("24h", "24 h"), ("7d", "Week"), ("30d", "Month"), ("1y", "Year")];
     let range_options: Vec<RangeOpt> = range_defs
         .iter()
@@ -615,7 +674,17 @@ fn furniture(filter: &Filter, spec: &Spec, base: &str, range: &str) -> (Vec<Rang
     if let Some(q) = &filter.q {
         chips.push(Chip { label: format!("Search: {q}"), remove: filter.without_q().href(base) });
     }
-    (range_options, chips)
+    // The pinned window is a chip of its own: it carries the bucket's epochs so
+    // the page can restate them in the reader's timezone, and removing it drops
+    // back to the plain range.
+    let window_chip = filter.window().map(|(from, to)| super::WindowChip {
+        from,
+        to,
+        label: super::window_label(from, to),
+        remove: filter.without_window().href(base),
+    });
+
+    (range_options, chips, window_chip)
 }
 
 fn top_n(

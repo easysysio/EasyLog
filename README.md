@@ -30,6 +30,10 @@ parsed events in an embedded **DuckDB** column store, and serves a live
   breakdowns, and top-N tables, rendered server-side. **Click any client IP,
   URL, status code, or country to drill down** — filters stack and are shareable
   by URL.
+- ⏱️ **Click a bar on "Requests over time"** to pin the dashboard to that period —
+  the 2am bar shows only the events between 2am and 3am. The timeline then
+  re-buckets inside that hour, so a further click narrows to five minutes; the
+  window shows as a removable chip and composes with every other filter.
 - 📄 **Raw view** — one button swaps any dashboard for the log lines behind it,
   newest first, under the same range, filters and search; another swaps back.
   Page through with **Load more**, or download every matching line as a file.

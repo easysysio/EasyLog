@@ -150,6 +150,118 @@ async fn favicon() -> Response {
     ([(header::CONTENT_TYPE, "image/svg+xml")], FAVICON).into_response()
 }
 
+
+/// The pinned-window chip. Carries the epochs as well as a UTC label so the page
+/// can restate it in the reader's timezone, like the timeline's own labels.
+#[derive(Serialize)]
+pub(crate) struct WindowChip {
+    pub from: i64,
+    pub to: i64,
+    pub label: String,
+    pub remove: String,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// bucket_end(range, start)
+// The exclusive end of a timeline bucket that starts at `start`, for the given
+// range — the window a dashboard is pinned to when that bar is clicked. Months
+// vary in length, so the year view's buckets are advanced by calendar month
+// rather than a fixed number of seconds.
+// ─────────────────────────────────────────────────────────────────────────────
+pub(crate) fn bucket_end(range: &str, start: i64) -> i64 {
+    match range {
+        "1h" => start + 5 * 60,
+        "7d" | "30d" => start + 24 * 60 * 60,
+        "1y" => {
+            let t = chrono::DateTime::from_timestamp(start, 0)
+                .unwrap_or_default()
+                .naive_utc();
+            let (mut y, mut m) = (t.year(), t.month());
+            if m == 12 {
+                y += 1;
+                m = 1;
+            } else {
+                m += 1;
+            }
+            NaiveDate::from_ymd_opt(y, m, 1)
+                .and_then(|d| d.and_hms_opt(0, 0, 0))
+                .map(|d| d.and_utc().timestamp())
+                .unwrap_or(start + 30 * 24 * 60 * 60)
+        }
+        _ => start + 60 * 60, // 24h view: hourly buckets
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// timeline_window(from, to)
+// Buckets for a dashboard pinned to an explicit window: the zero-fillable series
+// (bucket epoch, fallback label), the DuckDB expression that produces the same
+// boundaries, and the client granularity hint. The bucket size is chosen to give
+// roughly a dozen to thirty bars however wide the window is, so clicking into an
+// hour shows the minutes inside it rather than one lone bar.
+// ─────────────────────────────────────────────────────────────────────────────
+pub(crate) fn timeline_window(from: i64, to: i64) -> (Vec<(i64, String)>, String, &'static str) {
+    let span = (to - from).max(60);
+    // (bucket seconds, SQL, granularity hint, label format)
+    let (secs, sql, gran, fmt): (i64, String, &'static str, &'static str) = match span {
+        s if s <= 20 * 60 => (60, "time_bucket(INTERVAL '1 minute', ts)".into(), "time", "%H:%M"),
+        s if s <= 3 * 60 * 60 => (5 * 60, "time_bucket(INTERVAL '5 minutes', ts)".into(), "time", "%H:%M"),
+        s if s <= 12 * 60 * 60 => (15 * 60, "time_bucket(INTERVAL '15 minutes', ts)".into(), "time", "%H:%M"),
+        s if s <= 3 * 24 * 60 * 60 => (60 * 60, "date_trunc('hour', ts)".into(), "time", "%H:%M"),
+        s if s <= 90 * 24 * 60 * 60 => (24 * 60 * 60, "date_trunc('day', ts)".into(), "day", "%m-%d"),
+        _ => (30 * 24 * 60 * 60, "date_trunc('month', ts)".into(), "month", "%Y-%m"),
+    };
+
+    // Align to the bucket grid so the series matches what DuckDB groups by.
+    let start = from - from.rem_euclid(secs);
+    let mut series = Vec::new();
+    let mut at = start;
+    while at < to && series.len() < 200 {
+        let label = chrono::DateTime::from_timestamp(at, 0)
+            .map(|t| t.naive_utc().format(fmt).to_string())
+            .unwrap_or_default();
+        series.push((at, label));
+        at += secs;
+    }
+    (series, sql, gran)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// window_sql(from, to)
+// SQL condition + bound values pinning a query to [from, to), as UTC strings so
+// no timestamptz arithmetic (and therefore no ICU extension) is involved.
+// ─────────────────────────────────────────────────────────────────────────────
+pub(crate) fn window_sql(from: i64, to: i64) -> (String, Vec<String>) {
+    let fmt = |epoch: i64| {
+        chrono::DateTime::from_timestamp(epoch, 0)
+            .map(|t| t.naive_utc().format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_default()
+    };
+    (
+        "ts >= CAST(? AS TIMESTAMP) AND ts < CAST(? AS TIMESTAMP)".to_string(),
+        vec![fmt(from), fmt(to)],
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// window_label(from, to)
+// Human label for the pinned-window chip, in UTC. The page rewrites it to the
+// reader's timezone (see base.html), matching the timeline's own labels.
+// ─────────────────────────────────────────────────────────────────────────────
+pub(crate) fn window_label(from: i64, to: i64) -> String {
+    let at = |epoch: i64, fmt: &str| {
+        chrono::DateTime::from_timestamp(epoch, 0)
+            .map(|t| t.naive_utc().format(fmt).to_string())
+            .unwrap_or_default()
+    };
+    let span = to - from;
+    if span >= 24 * 60 * 60 {
+        format!("{} → {}", at(from, "%Y-%m-%d %H:%M"), at(to, "%Y-%m-%d %H:%M"))
+    } else {
+        format!("{} {}–{}", at(from, "%Y-%m-%d"), at(from, "%H:%M"), at(to, "%H:%M"))
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // timeline_series(range)
 // Returns the full, zero-fillable list of timeline buckets for a range as
@@ -750,5 +862,53 @@ mod tests {
                 .unwrap()
                 .for_each(drop);
         }
+    }
+
+    // Clicking a bar must pin exactly the period the bar stood for: the window a
+    // bar links to has to line up with the next bar's start, or a click would
+    // silently drop (or double-count) events at the seam.
+    #[test]
+    fn bar_windows_tile_the_range_without_gaps() {
+        for range in ["1h", "24h", "7d", "30d", "1y"] {
+            let series = timeline_series(range);
+            for pair in series.windows(2) {
+                assert_eq!(
+                    bucket_end(range, pair[0].0),
+                    pair[1].0,
+                    "{range}: bucket at {} does not end where the next begins",
+                    pair[0].0
+                );
+            }
+        }
+    }
+
+    // Inside a pinned window the timeline zooms in, and the zoomed buckets must
+    // stay within the window and on the grid DuckDB groups by.
+    #[test]
+    fn a_pinned_window_buckets_inside_itself() {
+        // 02:00–03:00 UTC on 2026-09-01, the hour a "2am" click pins.
+        let from = 1_788_228_000;
+        let to = from + 3600;
+        let (series, sql, gran) = timeline_window(from, to);
+        assert_eq!(sql, "time_bucket(INTERVAL '5 minutes', ts)");
+        assert_eq!(gran, "time");
+        assert_eq!(series.len(), 12);
+        assert_eq!(series[0].0, from);
+        assert!(series.iter().all(|(at, _)| *at >= from && *at < to));
+        assert!(series.windows(2).all(|w| w[1].0 - w[0].0 == 300));
+
+        // A one-minute window is the floor: it still yields a bar, so clicking
+        // it again is a no-op rather than an empty chart.
+        let (series, _, _) = timeline_window(from, from + 60);
+        assert_eq!(series.len(), 1);
+    }
+
+    // The window bounds are half-open, so neighbouring bars never share an event.
+    #[test]
+    fn window_sql_binds_half_open_bounds() {
+        let (cond, bounds) = window_sql(1_788_228_000, 1_788_231_600);
+        assert!(cond.contains(">= CAST(? AS TIMESTAMP)") && cond.contains("< CAST(? AS TIMESTAMP)"));
+        assert_eq!(bounds, vec!["2026-09-01 02:00:00", "2026-09-01 03:00:00"]);
+        assert_eq!(window_label(1_788_228_000, 1_788_231_600), "2026-09-01 02:00–03:00");
     }
 }

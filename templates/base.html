@@ -34,6 +34,9 @@
                  linear-gradient(var(--bs-border-color),var(--bs-border-color)) 0 0/100% 1px no-repeat,
                  linear-gradient(var(--bs-border-color),var(--bs-border-color)) 0 50%/100% 1px no-repeat; }
     .tl-bars .col { flex:1; display:flex; align-items:flex-end; height:100%; }
+    /* Bars are links: clicking one pins the dashboard to that bucket's period. */
+    a.col { text-decoration:none; }
+    a.col:hover .bar { filter:brightness(1.15); }
     .tl-bars .bar { width:72%; margin:0 auto; min-height:3px; border-radius:4px 4px 0 0; }
     .tl-xaxis { display:flex; gap:5px; margin-top:6px; padding-left:5px; }
     .tl-xaxis .xl { flex:1; text-align:center; font-size:.7rem;
@@ -211,9 +214,31 @@
         el.textContent = fmt(parseInt(el.dataset.ts, 10));
       });
       chart.querySelectorAll('.tl-bars .col[data-ts]').forEach(function (el) {
-        el.setAttribute('title', fmt(parseInt(el.dataset.ts, 10)) + ' — ' + (el.dataset.count || '0') + ' requests');
+        var hint = el.tagName === 'A' ? ' (click to filter to this period)' : '';
+        el.setAttribute('title',
+          fmt(parseInt(el.dataset.ts, 10)) + ' — ' + (el.dataset.count || '0') + ' requests' + hint);
       });
     }
+    // The pinned-window chip carries UTC epochs; restate it in local time so it
+    // agrees with the timeline labels above it.
+    document.querySelectorAll('.chip-window[data-from][data-to]').forEach(function (el) {
+      var from = new Date(parseInt(el.dataset.from, 10) * 1000);
+      var to = new Date(parseInt(el.dataset.to, 10) * 1000);
+      var day = { month: '2-digit', day: '2-digit' };
+      var clock = { hour: '2-digit', minute: '2-digit' };
+      var span = parseInt(el.dataset.to, 10) - parseInt(el.dataset.from, 10);
+      var text;
+      if (span >= 86400) {
+        text = from.toLocaleDateString([], day) + '–' + new Date(to - 1).toLocaleDateString([], day);
+      } else if (from.toDateString() === to.toDateString()) {
+        text = from.toLocaleDateString([], day) + ' ' +
+               from.toLocaleTimeString([], clock) + '–' + to.toLocaleTimeString([], clock);
+      } else {
+        text = from.toLocaleDateString([], day) + ' ' + from.toLocaleTimeString([], clock) + '–' +
+               to.toLocaleDateString([], day) + ' ' + to.toLocaleTimeString([], clock);
+      }
+      el.textContent = 'Time: ' + text;
+    });
     // Initialize Bootstrap tooltips (timeline bars).
     document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
       new bootstrap.Tooltip(el);

@@ -47,9 +47,15 @@
     <i class="bi bi-card-text me-1"></i>Raw</a>
 </div>
 
-{% if has_filters %}
+{% if has_filters or window %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <span class="text-secondary small me-1"><i class="bi bi-funnel me-1"></i>Filters</span>
+  {% if window %}
+  <a href="{{ window.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
+    <span class="chip-window" data-from="{{ window.from }}" data-to="{{ window.to }}">Time: {{ window.label }} UTC</span>
+    <i class="bi bi-x-lg ms-1"></i>
+  </a>
+  {% endif %}
   {% for c in chips %}
   <a href="{{ c.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
     {{ c.label }} <i class="bi bi-x-lg ms-1"></i>
@@ -103,10 +109,10 @@
     <div class="tl-plot">
       <div class="tl-bars">
         {% for b in timeline %}
-        <div class="col" data-ts="{{ b.ts_epoch }}" data-count="{{ b.count }}">
-          <div class="bar bg-primary" style="height:{{ b.pct }}%" data-bs-toggle="tooltip"
-               title="{{ b.label }} — {{ b.count }}"></div>
-        </div>
+        <a class="col" href="{{ b.href }}" data-ts="{{ b.ts_epoch }}" data-count="{{ b.count }}"
+           data-bs-toggle="tooltip" title="{{ b.label }} — {{ b.count }} (click to filter to this period)">
+          <div class="bar bg-primary" style="height:{{ b.pct }}%"></div>
+        </a>
         {% endfor %}
       </div>
       <div class="tl-xaxis">
