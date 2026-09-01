@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-09-01
+
 ### Added
 - **Click a timeline bar to filter the dashboard to that period.** Every bar on
   "Requests over time" is now a link: clicking the 2am bar bounds the whole page
