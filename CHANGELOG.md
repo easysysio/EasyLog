@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-09-09
+
 ### Added
 - **EasyWAF log type, under a new WAF category.** EasyLog parses the EasyWAF
   0.9.0 event log — logfmt over syslog, one line per proxied request — and gives
