@@ -21,6 +21,7 @@ use std::collections::HashMap;
 pub mod apache;
 pub mod caddy;
 pub mod cisco_asa;
+pub mod easywaf;
 pub mod firewall;
 pub mod general;
 pub mod haproxy;
@@ -57,6 +58,8 @@ pub struct Meta {
 pub enum Category {
     Web,
     Firewall,
+    /// Web application firewalls — verdicts and rule scores, not packets.
+    Waf,
     /// Logs kept without a parser — see logtype/general.rs.
     General,
     ThirdParty,
@@ -65,14 +68,20 @@ pub enum Category {
 impl Category {
     /// Every category, in display order. A category with no registered types is
     /// skipped when the navigation is built, so this can list planned ones.
-    pub const ALL: [Category; 4] =
-        [Category::Web, Category::Firewall, Category::General, Category::ThirdParty];
+    pub const ALL: [Category; 5] = [
+        Category::Web,
+        Category::Firewall,
+        Category::Waf,
+        Category::General,
+        Category::ThirdParty,
+    ];
 
     /// URL segment, e.g. "web" in /web/apache.
     pub fn slug(self) -> &'static str {
         match self {
             Category::Web => "web",
             Category::Firewall => "firewall",
+            Category::Waf => "waf",
             Category::General => "general",
             Category::ThirdParty => "third-party",
         }
@@ -82,6 +91,7 @@ impl Category {
         match self {
             Category::Web => "Web",
             Category::Firewall => "Firewalls",
+            Category::Waf => "WAF",
             Category::General => "General",
             Category::ThirdParty => "3rd parties",
         }
@@ -91,6 +101,7 @@ impl Category {
         match self {
             Category::Web => "bi-globe2",
             Category::Firewall => "bi-shield-lock",
+            Category::Waf => "bi-shield-shaded",
             Category::General => "bi-journal-text",
             Category::ThirdParty => "bi-puzzle",
         }
@@ -173,6 +184,8 @@ impl Registry {
         types.insert(cisco_asa.name(), Box::new(cisco_asa));
         let panos = panos::PanOs;
         types.insert(panos.name(), Box::new(panos));
+        let easywaf = easywaf::EasyWaf;
+        types.insert(easywaf.name(), Box::new(easywaf));
         let general = general::General;
         types.insert(general.name(), Box::new(general));
         Registry { types }

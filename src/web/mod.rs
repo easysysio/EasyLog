@@ -36,6 +36,7 @@ use crate::state::{AppState, WebState};
 mod apache;
 mod caddy;
 mod cisco_asa;
+mod easywaf;
 mod firewall;
 mod general;
 mod geomap;
@@ -76,6 +77,7 @@ pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
         .route("/web/haproxy", get(haproxy::dashboard))
         .route("/firewall/cisco_asa", get(cisco_asa::dashboard))
         .route("/firewall/panos", get(panos::dashboard))
+        .route("/waf/easywaf", get(easywaf::dashboard))
         .route("/general/syslog", get(general::dashboard))
         .route("/apache", get(|uri: Uri| moved(uri, "/web/apache")))
         .route("/apache/recent", get(|uri: Uri| moved(uri, "/web/apache/recent")))

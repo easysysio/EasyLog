@@ -66,6 +66,10 @@ Supported log types:
   **Traefik** (JSON access logs).
 * **Firewalls** — **Cisco ASA** (syslog message IDs) and **Palo Alto / PAN-OS**
   (TRAFFIC logs), on a dashboard built around the allow/deny split.
+* **WAF** — **EasyWAF** (logfmt event log), on a dashboard built around the
+  verdict: what was blocked, and — separately — what was **served that an
+  enforcing policy would have refused**, with the rules that fired and the same
+  split across every appliance sending in.
 * **General** — anything else. Lines are stored exactly as received, with no
   parsing, so a device EasyLog has no parser for is still collected and
   searchable.
@@ -277,6 +281,7 @@ registry, so adding a type adds its entry automatically.
 | `GET /web/traefik` | Traefik dashboard |
 | `GET /firewall/cisco_asa` | Cisco ASA dashboard |
 | `GET /firewall/panos` | Palo Alto dashboard |
+| `GET /waf/easywaf` | EasyWAF dashboard |
 | `GET /sources` | Manage log sources |
 | `GET /health` | Liveness probe (`ok`) |
 | `GET /web/apache/recent` | Recent parsed Apache rows (JSON) |

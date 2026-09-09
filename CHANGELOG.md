@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **EasyWAF log type, under a new WAF category.** EasyLog parses the EasyWAF
+  0.9.0 event log — logfmt over syslog, one line per proxied request — and gives
+  it a dashboard of its own at `/waf/easywaf`. The parser splits on whitespace
+  *outside* quotes (honouring `\\` and `\"`) so the attacker-influenced `path`
+  and `reason` cannot forge a field, ignores unknown keys so new EasyWAF fields
+  don't break ingestion, keeps an absent `score` distinct from `score=0`, and
+  drops a line missing `ts`, `verdict` or `client` rather than storing part of it.
+- The dashboard is built around what the WAF **let through**: alongside blocked
+  and block rate, a **Served anyway** card counts `would_block` + `would_challenge`
+  — requests an enforcing policy would have refused. Verdicts are stacked on the
+  timeline and split worst-first, there is a per-appliance/site table (the view a
+  single EasyWAF cannot produce), top rules fired (the `rules` list unnested),
+  and top clients, paths, hosts and countries with the world map. Every figure
+  filters, and filters compose with search, the range and the pinned timeline
+  window as on every other dashboard.
+
 ## [0.8.0] — 2026-09-01
 
 ### Added

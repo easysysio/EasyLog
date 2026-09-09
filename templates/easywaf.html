@@ -1,0 +1,379 @@
+{# easywaf.html — EasyWAF dashboard: KPIs built around what the WAF let through,
+   a verdict-stacked timeline, the verdict split, the per-appliance fleet table,
+   top rules / clients / paths / hosts / countries and the world map.
+   Context comes from web/easywaf.rs. #}
+{% extends "base.html" %}
+{% block title %}{{ type_label }} — EasyLog{% endblock %}
+{% block head %}
+<style>
+  /* One colour per verdict, shared by the stacked timeline and the verdict
+     split so a colour means the same thing in both. Ordered worst-first:
+     blocked (stopped) reads as danger, the two "would have" verdicts as the
+     warning they are, passed as calm. */
+  .v-blocked         { background:#e2555a; }
+  .v-would-block     { background:#f0883e; }
+  .v-would-challenge { background:#d8a02a; }
+  .v-challenged      { background:#a371f7; }
+  .v-scored          { background:#4f9cf9; }
+  .v-passed          { background:#3fb950; }
+  .v-other           { background:#8b949e; }
+  /* A stacked bar: segments fill it bottom-up in verdict order, worst at the
+     foot of the stack where the bars can be compared against the axis. The bar
+     itself has no colour of its own — integer segment heights round down by a
+     percent or two, and the topmost segment grows to absorb that rather than
+     letting a background show through as a phantom verdict. */
+  .tl-bars .bar.stack { display:flex; flex-direction:column-reverse; overflow:hidden;
+                        background:transparent; }
+  .tl-bars .seg { width:100%; }
+  .tl-bars .seg:last-child { flex:1 0 auto; }
+  .legend { display:flex; flex-wrap:wrap; gap:.75rem; font-size:.78rem; }
+  .legend .sw { display:inline-block; width:.7rem; height:.7rem; border-radius:2px;
+                margin-right:.3rem; vertical-align:-1px; }
+  .fleet td, .fleet th { white-space:nowrap; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0"><i class="bi bi-shield-shaded me-2"></i>{{ type_label }}</h1>
+  <span class="badge text-bg-secondary">WAF event log</span>
+</div>
+
+{% if not has_data %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+      No {{ type_label }} events yet. Add an {{ type_label }} <a href="/sources">source</a> and point
+      that appliance's syslog target at EasyLog — one datagram per proxied request,
+      and its verdicts will appear here.
+    </div>
+  </div>
+{% else %}
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-clock-history me-1"></i>Range</span>
+  <div class="btn-group btn-group-sm" role="group" aria-label="Time range">
+    {% for r in range_options %}
+    <a href="{{ r.href }}" class="btn btn-outline-primary {% if r.active %}active{% endif %}">{{ r.label }}</a>
+    {% endfor %}
+  </div>
+  {# Search narrows everything on the page — KPIs, charts, panels and the map —
+     and keeps whatever filters are already active via the hidden fields. #}
+  <form class="d-flex ms-auto" method="get" action="{{ base }}" role="search">
+    {% for f in search_fields %}<input type="hidden" name="{{ f.name }}" value="{{ f.value }}">{% endfor %}
+    <div class="input-group input-group-sm" style="width:22rem;max-width:100%">
+      <span class="input-group-text"><i class="bi bi-search"></i></span>
+      <input class="form-control" type="search" name="q" value="{{ search }}"
+             placeholder="{{ search_placeholder }}" aria-label="Search">
+      {% if search %}<a class="btn btn-outline-secondary" href="{{ base }}" title="Clear search"><i class="bi bi-x-lg"></i></a>{% endif %}
+      <button class="btn btn-outline-primary" type="submit">Search</button>
+    </div>
+  </form>
+  {# The same filters, shown as the log lines behind them. #}
+  <a href="{{ raw_href }}" class="btn btn-sm btn-outline-secondary"
+     title="Show the raw log lines for these filters">
+    <i class="bi bi-card-text me-1"></i>Raw</a>
+</div>
+
+{% if has_filters or window %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-funnel me-1"></i>Filters</span>
+  {% if window %}
+  <a href="{{ window.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
+    <span class="chip-window" data-from="{{ window.from }}" data-to="{{ window.to }}">Time: {{ window.label }} UTC</span>
+    <i class="bi bi-x-lg ms-1"></i>
+  </a>
+  {% endif %}
+  {% for c in chips %}
+  <a href="{{ c.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
+    {{ c.label }} <i class="bi bi-x-lg ms-1"></i>
+  </a>
+  {% endfor %}
+  <a href="{{ base }}" class="small text-decoration-none ms-1">Clear all</a>
+</div>
+{% endif %}
+
+{% if kpis.events == 0 %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-search fs-2 d-block mb-2"></i>
+      No events in the selected time range or filter.
+    </div>
+  </div>
+{% else %}
+
+<div class="row row-cols-2 row-cols-lg-5 g-3 mb-4">
+  <div class="col">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-activity me-1"></i>Events</h6>
+      <div class="stat-value">{{ kpis.events }}</div>
+    </div></div>
+  </div>
+  <div class="col">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-shield-x me-1"></i>Blocked</h6>
+      <div class="stat-value">{{ kpis.blocked }}</div>
+    </div></div>
+  </div>
+  <div class="col">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-percent me-1"></i>Block rate</h6>
+      <div class="stat-value">{{ kpis.block_rate }}</div>
+    </div></div>
+  </div>
+  {# The number that justifies enforcing: requests an enforcing policy would
+     have stopped, served because the policy is in DetectionOnly. #}
+  <div class="col">
+    <div class="card h-100 border-warning"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-exclamation-triangle me-1"></i>Served anyway</h6>
+      <div class="stat-value text-warning">{{ kpis.served_anyway }}</div>
+      <div class="text-secondary small">would block / challenge</div>
+    </div></div>
+  </div>
+  <div class="col">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-people me-1"></i>Clients</h6>
+      <div class="stat-value">{{ kpis.clients }}</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3">Verdicts over time <span class="text-secondary">({{ range_label }})</span></h6>
+    {% if timeline | length == 0 %}
+      <div class="text-secondary py-3">No events in this time range.</div>
+    {% else %}
+    <div class="tl-chart" data-tl-gran="{{ tl_gran }}">
+      <div class="tl-yaxis">
+        <span>{{ timeline_max }}</span>
+        {% if timeline_max > 1 %}<span>{{ timeline_mid }}</span>{% endif %}
+        <span>0</span>
+      </div>
+      <div class="tl-plot">
+        <div class="tl-bars">
+          {% for b in timeline %}
+          <a class="col" href="{{ b.href }}" data-bs-toggle="tooltip" data-ts="{{ b.ts_epoch }}"
+             data-count="{{ b.count }}"
+             title="{{ b.label }} — {{ b.count }} events (click to filter to this period)">
+            <div class="bar stack" style="height:{{ b.pct }}%">
+              {% for s in b.segments %}
+              <div class="seg {{ s.css }}" style="height:{{ s.share }}%"></div>
+              {% endfor %}
+            </div>
+          </a>
+          {% endfor %}
+        </div>
+        <div class="tl-xaxis">
+          {% for b in timeline %}<div class="xl" data-ts="{{ b.ts_epoch }}">{{ b.label }}</div>{% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="legend text-secondary mt-3">
+      {% for v in verdicts %}
+      <span><i class="sw {{ v.css }}"></i>{{ v.label }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3">Verdicts <span class="text-secondary">(click to filter)</span></h6>
+    {% for v in verdicts %}
+    <a href="{{ v.href }}" class="d-flex align-items-center mb-2 text-decoration-none text-reset"
+       title="Filter to {{ v.label }}">
+      <div class="fw-semibold text-capitalize" style="width:130px">{{ v.label }}</div>
+      <div class="progress flex-grow-1" role="progressbar" style="height:18px">
+        <div class="progress-bar {{ v.css }}" style="width:{{ v.pct }}%"></div>
+      </div>
+      <div class="text-secondary text-end font-monospace" style="width:64px">{{ v.count }}</div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+{# The view a single EasyWAF cannot produce: the same split across every
+   appliance sending here. #}
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-hdd-network me-1"></i>By appliance and site
+      <span class="text-secondary">(click a figure to filter)</span></h6>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0 fleet">
+        <thead>
+          <tr class="text-secondary small">
+            <th>Appliance</th><th>Site</th>
+            <th class="text-end">Events</th><th class="text-end">Scored</th>
+            <th class="text-end">Blocked</th><th class="text-end">Served anyway</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in fleet %}
+          <tr>
+            <td class="font-monospace small">
+              <a href="{{ r.appliance_href }}" class="text-decoration-none">{{ r.appliance }}</a>
+            </td>
+            <td class="small">
+              {% if r.site_href %}<a href="{{ r.site_href }}" class="text-decoration-none">{{ r.site }}</a>
+              {% else %}<span class="text-secondary">{{ r.site }}</span>{% endif %}
+            </td>
+            <td class="text-end font-monospace">{{ r.events }}</td>
+            <td class="text-end font-monospace text-secondary">{{ r.scored }}</td>
+            <td class="text-end font-monospace">
+              <a href="{{ r.blocked_href }}" class="text-decoration-none">{{ r.blocked }}</a>
+            </td>
+            <td class="text-end font-monospace">
+              {% if r.would > 0 %}
+              <a href="{{ r.would_href }}" class="text-decoration-none text-warning fw-semibold">{{ r.would }}</a>
+              {% else %}<span class="text-secondary">0</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% include "_worldmap.html" %}
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi bi-list-check me-1"></i>Top rules fired
+          <span class="text-secondary">(click to filter)</span></h6>
+        {% if top_rules | length == 0 %}
+          <div class="text-secondary small py-2">No catalogue rule matched these events.</div>
+        {% else %}
+        <table class="table table-sm table-hover align-middle mb-0">
+          <tbody>
+            {% for r in top_rules %}
+            <tr>
+              <td class="font-monospace small truncate w-50">
+                <a href="{{ r.href }}" class="text-decoration-none" title="Filter to rule {{ r.label }}">{{ r.label }}</a>
+              </td>
+              <td class="w-50">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi bi-pc-display me-1"></i>Top clients <span class="text-secondary">(click to filter)</span></h6>
+        <table class="table table-sm table-hover align-middle mb-0">
+          <tbody>
+            {% for r in top_clients %}
+            <tr>
+              <td class="font-monospace small truncate w-50">
+                <a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a>
+              </td>
+              <td class="w-50">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi bi-link-45deg me-1"></i>Top paths <span class="text-secondary">(click to filter)</span></h6>
+        <table class="table table-sm table-hover align-middle mb-0">
+          <tbody>
+            {% for r in top_paths %}
+            <tr>
+              <td class="font-monospace small truncate w-50">
+                <a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a>
+              </td>
+              <td class="w-50">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi bi-hdd-rack me-1"></i>Top hosts <span class="text-secondary">(click to filter)</span></h6>
+        <table class="table table-sm table-hover align-middle mb-0">
+          <tbody>
+            {% for r in top_hosts %}
+            <tr>
+              <td class="font-monospace small truncate w-50">
+                <a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a>
+              </td>
+              <td class="w-50">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi bi-globe2 me-1"></i>Top countries <span class="text-secondary">(click to filter)</span></h6>
+        <table class="table table-sm table-hover align-middle mb-0">
+          <tbody>
+            {% for r in top_countries %}
+            <tr>
+              <td class="small truncate w-50">
+                <a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a>
+              </td>
+              <td class="w-50">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# EasyWAF drops rather than blocking its own request path, so these counts are
+   of what arrived — not a guaranteed tally of every request it served. #}
+<p class="text-secondary small mt-4 mb-0">
+  Counts are of events received over syslog; EasyWAF drops rather than blocking its
+  request path, so under load some events may not have reached EasyLog.
+  IP geolocation by <a href="https://db-ip.com" class="text-secondary" rel="noopener">DB-IP</a> (CC BY 4.0).
+</p>
+
+{% endif %}{# events == 0 #}
+{% endif %}{# not has_data #}
+{% endblock %}
