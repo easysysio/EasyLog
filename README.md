@@ -14,6 +14,8 @@ parsed events in an embedded **DuckDB** column store, and serves a live
 [![Rust](https://img.shields.io/badge/Rust-1.95%2B-orange.svg)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/Linux-x86__64%20%7C%20arm64-informational.svg)](#installation)
 
+📖 **Documentation: [easylog.easysys.io](https://easylog.easysys.io)**
+
 </div>
 
 ---
