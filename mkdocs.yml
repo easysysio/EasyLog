@@ -89,6 +89,11 @@ plugins:
   - glightbox
 
 extra:
+  # Google Analytics 4. Material injects gtag.js and reports page views,
+  # including the ones made by instant navigation.
+  analytics:
+    provider: google
+    property: G-PZ9LDFF12Q
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/easysysio/EasyLog
