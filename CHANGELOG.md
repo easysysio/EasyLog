@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **rustls 0.23.43 → 0.23.46** (RUSTSEC-2026-0285, -0346, -0348, -0349). rustls
+  is only a *build* dependency here — DuckDB's build script uses it to fetch
+  over HTTPS — so the shipped binary never contained it and none of the four
+  advisories was reachable at runtime. Updated so `cargo audit` is clean again.
+
 ## [0.9.0] — 2026-09-09
 
 ### Added
