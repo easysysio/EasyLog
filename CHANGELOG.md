@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is only a *build* dependency here — DuckDB's build script uses it to fetch
   over HTTPS — so the shipped binary never contained it and none of the four
   advisories was reachable at runtime. Updated so `cargo audit` is clean again.
+- **DuckDB 1.5.5 → 1.5.6** (`duckdb` / `libduckdb-sys` 1.10506.1), which moves
+  its build-time archive extractor from `zip` 6 to 9 (RUSTSEC-2026-0367, -0368,
+  -0369). Like rustls, `zip` only runs while compiling DuckDB and was never in
+  the binary. The DuckDB engine itself is a patch release: databases written
+  by earlier versions open and keep ingesting unchanged. Pinned to the 1.5 line
+  on purpose; `libduckdb-sys` 1.20000 is DuckDB 2.0 and needs its own upgrade.
+- **rustls-webpki 0.103.16 and webpki-roots 1.0.11** (RUSTSEC-2026-0382,
+  -0381), the same build-time HTTPS path as rustls.
+- **tokio 1.53.1 → 1.54.1** for the `AsyncFd` unsoundness warning
+  (RUSTSEC-2026-0386). EasyLog never constructs an `AsyncFd`, so it wasn't
+  affected; this is the one runtime crate in the batch.
 
 ## [0.9.0] — 2026-09-09
 
