@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-10-31
+
 ### Added
 - **Linux log type, under a new Systems category.** Point a server's rsyslog
   at EasyLog (`*.* @EASYLOG_IP:514`) and register it as type **Linux**. Every
