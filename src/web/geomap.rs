@@ -98,6 +98,20 @@ pub(crate) fn counts(
 // overview, which has no filter to drill into).
 // ─────────────────────────────────────────────────────────────────────────────
 pub(crate) fn build(rows: &[CountryCount], href_for: Option<&dyn Fn(&str) -> String>) -> MapView {
+    build_counting(rows, href_for, ("request", "requests"))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// build_counting(rows, href_for, unit)
+// The same map for something other than requests — `unit` is the (singular,
+// plural) noun the country tooltips count in, e.g. ("failed login", "failed
+// logins") on the Linux dashboard.
+// ─────────────────────────────────────────────────────────────────────────────
+pub(crate) fn build_counting(
+    rows: &[CountryCount],
+    href_for: Option<&dyn Fn(&str) -> String>,
+    unit: (&str, &str),
+) -> MapView {
     let located: Vec<&CountryCount> = rows.iter().filter(|r| !r.code.trim().is_empty()).collect();
     let unlocated: i64 = rows
         .iter()
@@ -121,7 +135,7 @@ pub(crate) fn build(rows: &[CountryCount], href_for: Option<&dyn Fn(&str) -> Str
         .collect();
 
     MapView {
-        svg: shade_svg(&shades),
+        svg: shade_svg(&shades, unit),
         legend: legend(max),
         countries: shades.len() as i64,
         unlocated,
@@ -180,7 +194,7 @@ fn legend(max: i64) -> Vec<LegendStep> {
 // has traffic is rewritten with its shading class, a tooltip, and (when a link
 // was supplied) an <a> wrapper. Every other path is copied through untouched.
 // ─────────────────────────────────────────────────────────────────────────────
-fn shade_svg(shades: &HashMap<String, Shade<'_>>) -> String {
+fn shade_svg(shades: &HashMap<String, Shade<'_>>, unit: (&str, &str)) -> String {
     let mut out = String::with_capacity(WORLD_SVG.len() + 4096);
     let mut rest = WORLD_SVG;
 
@@ -213,7 +227,8 @@ fn shade_svg(shades: &HashMap<String, Shade<'_>>) -> String {
         escape_into(shade.name, &mut out);
         out.push_str(" — ");
         out.push_str(&shade.count.to_string());
-        out.push_str(if shade.count == 1 { " request" } else { " requests" });
+        out.push(' ');
+        out.push_str(if shade.count == 1 { unit.0 } else { unit.1 });
         out.push_str("\"/>");
         if shade.href.is_some() {
             out.push_str("</a>");

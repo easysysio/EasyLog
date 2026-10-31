@@ -125,6 +125,16 @@ Get started
 </div>
 <div class="es-card el-type">
 <div class="el-type-top">
+<div class="es-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M7 9l3 3-3 3M13 15h4"></path></svg></div>
+<span class="es-tag es-mono">/system</span>
+</div>
+<span class="es-kicker">Servers</span>
+<h3 class="es-h3">Who tried to get in, and who did</h3>
+<p class="es-product-text">Every line a server logs, with SSH brute-forcing pulled to the top: failed logins, attacking addresses on a map, the usernames they guess, every successful login, sudo and su, and account changes.</p>
+<div class="es-tags"><span class="es-tag">Linux</span></div>
+</div>
+<div class="es-card el-type el-type-wide">
+<div class="el-type-top">
 <div class="es-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a1 1 0 00-1 1v16a1 1 0 001 1h12a1 1 0 001-1V8l-5-5z"></path><path d="M14 3v5h5M8 13h8M8 17h6"></path></svg></div>
 <span class="es-tag es-mono">/general</span>
 </div>

@@ -72,6 +72,10 @@ Supported log types:
   verdict: what was blocked, and — separately — what was **served that an
   enforcing policy would have refused**, with the rules that fired and the same
   split across every appliance sending in.
+* **Systems** — **Linux** (syslog from any server). Every line is kept, and SSH
+  logins, sudo/su, PAM failures and account changes are parsed into a dashboard
+  of failed logins, attacking IPs, usernames tried, a failed-login map, recent
+  successful logins and privilege use.
 * **General** — anything else. Lines are stored exactly as received, with no
   parsing, so a device EasyLog has no parser for is still collected and
   searchable.
@@ -284,6 +288,7 @@ registry, so adding a type adds its entry automatically.
 | `GET /firewall/cisco_asa` | Cisco ASA dashboard |
 | `GET /firewall/panos` | Palo Alto dashboard |
 | `GET /waf/easywaf` | EasyWAF dashboard |
+| `GET /system/linux` | Linux dashboard |
 | `GET /sources` | Manage log sources |
 | `GET /health` | Liveness probe (`ok`) |
 | `GET /web/apache/recent` | Recent parsed Apache rows (JSON) |

@@ -106,4 +106,4 @@ extra_css:
   # Bump ?v= whenever a stylesheet changes so browsers fetch the new file
   # instead of serving a cached copy.
   - stylesheets/easysys.css?v=1
-  - stylesheets/easylog.css?v=1
+  - stylesheets/easylog.css?v=2

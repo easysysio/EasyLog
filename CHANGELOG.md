@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Linux log type, under a new Systems category.** Point a server's rsyslog
+  at EasyLog (`*.* @EASYLOG_IP:514`) and register it as type **Linux**. Every
+  line is kept — a source maps to one type, and a server forwards everything —
+  with its program and PID, and the security events are read into structured
+  fields: SSH logins (accepted, failed, invalid user, dropped before auth;
+  OpenSSH 9.8+ `sshd-session` included), sudo and su in both the util-linux and
+  shadow wordings (refusals included), PAM authentication failures for services
+  that don't log their own (console login, FTP, mail …), and account and group
+  changes. BSD and RFC 5424 syslog headers both work.
+- The dashboard at `/system/linux` leads with failed logins, attacking IPs,
+  invalid usernames, successful logins and sudo use; stacks every line by kind
+  on the timeline; and has the attacking addresses with their country, the
+  usernames tried, a world map of failed logins, a **Recent logins** table,
+  sudo/su and account-change tables, and the busiest servers and programs.
+  Everything filters and composes with search, the range and the pinned
+  timeline window, as on every other dashboard.
+- The world-map card can count something other than requests, so the Linux map
+  reads "failed logins" in its title, legend and tooltips.
+
 ## [0.9.1] — 2026-10-28
 
 ### Security

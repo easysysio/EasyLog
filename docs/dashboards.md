@@ -33,7 +33,7 @@ Every dashboard has a **search box** beside the range selector. It matches free 
 
 Matching is case-insensitive substring, so `203.0.113` finds a whole subnet, `/admin` finds every path containing it, and `443` finds traffic to that port. Search behaves like any other filter: it narrows the KPIs, the timeline, every panel and the world map together, stacks with whatever drill-down is already active, appears as a removable chip, and is part of the URL — so a search is as shareable as any other view.
 
-Dashboards are grouped by **category** in the navigation: the top row picks a category — **Web**, **Firewalls**, **WAF**, **General**, with **3rd parties** appearing as those log types land — and the row beneath it lists that category's dashboards. Each dashboard lives under its category, e.g. `/web/apache` or `/waf/easywaf`; the older flat paths such as `/apache` redirect there, so existing bookmarks keep working.
+Dashboards are grouped by **category** in the navigation: the top row picks a category — **Web**, **Firewalls**, **WAF**, **Systems**, **General**, with **3rd parties** appearing as those log types land — and the row beneath it lists that category's dashboards. Each dashboard lives under its category, e.g. `/web/apache` or `/waf/easywaf`; the older flat paths such as `/apache` redirect there, so existing bookmarks keep working.
 
 ## The WAF dashboard
 
@@ -50,6 +50,17 @@ EasyWAF's dashboard asks a different question from the firewall ones. A firewall
 </figure>
 
 So the dashboard leads with a **Served anyway** card counting `would_block` + `would_challenge` — on a DetectionOnly policy that is the number that justifies enforcing — and stacks all six verdicts on the timeline, worst at the foot of each bar. Below it, **By appliance and site** repeats the split for every EasyWAF sending in, which is the view a single appliance cannot produce and the main reason to ship the logs at all. **Top rules fired** unnests the rule list, so a rule dominating `scored` against ordinary traffic stands out as a tuning candidate, while one dominating `blocked` is doing its job. Everything filters, and filters stack: rule 942100 + verdict `scored` + last hour is three clicks.
+
+## The Linux dashboard
+
+A server's log is mostly routine — cron, the kernel, systemd — with the security story scattered through it. The Linux dashboard keeps every line but leads with that story:
+
+*   **Who is trying to get in.** *Failed logins*, *Attacking IPs* and *Invalid users* (names tried that don't exist), then the attacking addresses with their country, the usernames they guess, and a map of where failed logins come from.
+*   **Who did get in.** *Recent logins* lists every successful login with server, user, address, country and method. After a burst of failures, a login from one of those addresses is the line that matters.
+*   **What they did with it.** sudo and su, with refusals (wrong password, not in sudoers) highlighted, and account and group changes.
+*   **Everything else**, by server and by program, and as raw lines.
+
+The timeline stacks every line by kind — failed logins at the foot, then refused privilege, account changes, sudo/su, logins and other lines — so an attack shows as a red band against the grey of routine logging. A single SSH attempt can log several lines (invalid user, failed password, a disconnect), so *Failed logins* counts only rejected authentications and *Attacking IPs* counts addresses. Times are when EasyLog received each line, since a classic syslog timestamp carries no year or zone.
 
 ## Where your traffic comes from
 

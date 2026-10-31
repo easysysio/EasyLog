@@ -1,0 +1,431 @@
+{# linux.html — Linux dashboard: login and privilege KPIs, every line over time
+   stacked by kind, the event split, who is attacking (addresses, usernames,
+   countries, map), who got in, sudo/su, account changes, and the busiest
+   servers and programs. Context comes from web/linux.rs. #}
+{% extends "base.html" %}
+{% block title %}{{ type_label }} — EasyLog{% endblock %}
+{% block head %}
+<style>
+  /* One colour per kind of line, shared by the stacked timeline, the event
+     split and the attack panels, so a colour means the same thing everywhere:
+     failures read as danger, routine logging as neutral grey. */
+  .k-failed    { background:#e2555a; }
+  .k-refused   { background:#f0883e; }
+  .k-account   { background:#d8a02a; }
+  .k-privilege { background:#a371f7; }
+  .k-login     { background:#3fb950; }
+  .k-other     { background:#8b949e; }
+  /* A stacked bar: segments fill it bottom-up, failures at the foot. The bar
+     has no colour of its own and the top segment absorbs rounding, so no
+     background shows through as a phantom kind. */
+  .tl-bars .bar.stack { display:flex; flex-direction:column-reverse; overflow:hidden;
+                        background:transparent; }
+  .tl-bars .seg { width:100%; }
+  .tl-bars .seg:last-child { flex:1 0 auto; }
+  .legend { display:flex; flex-wrap:wrap; gap:.75rem; font-size:.78rem; }
+  .legend .sw { display:inline-block; width:.7rem; height:.7rem; border-radius:2px;
+                margin-right:.3rem; vertical-align:-1px; }
+  .events td { white-space:nowrap; }
+  .events td.wrap { white-space:normal; word-break:break-all; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0"><i class="bi bi-terminal me-2"></i>{{ type_label }}</h1>
+  <span class="badge text-bg-secondary">System log</span>
+</div>
+
+{% if not has_data %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+      No Linux logs yet. Add a {{ type_label }} <a href="/sources">source</a> and forward
+      that server's syslog to EasyLog — every line is kept, and SSH, sudo, su and
+      account changes are picked out here.
+    </div>
+  </div>
+{% else %}
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-clock-history me-1"></i>Range</span>
+  <div class="btn-group btn-group-sm" role="group" aria-label="Time range">
+    {% for r in range_options %}
+    <a href="{{ r.href }}" class="btn btn-outline-primary {% if r.active %}active{% endif %}">{{ r.label }}</a>
+    {% endfor %}
+  </div>
+  {# Search narrows everything on the page and keeps the active filters. #}
+  <form class="d-flex ms-auto" method="get" action="{{ base }}" role="search">
+    {% for f in search_fields %}<input type="hidden" name="{{ f.name }}" value="{{ f.value }}">{% endfor %}
+    <div class="input-group input-group-sm" style="width:22rem;max-width:100%">
+      <span class="input-group-text"><i class="bi bi-search"></i></span>
+      <input class="form-control" type="search" name="q" value="{{ search }}"
+             placeholder="{{ search_placeholder }}" aria-label="Search">
+      {% if search %}<a class="btn btn-outline-secondary" href="{{ base }}" title="Clear search"><i class="bi bi-x-lg"></i></a>{% endif %}
+      <button class="btn btn-outline-primary" type="submit">Search</button>
+    </div>
+  </form>
+  <a href="{{ raw_href }}" class="btn btn-sm btn-outline-secondary"
+     title="Show the raw log lines for these filters">
+    <i class="bi bi-card-text me-1"></i>Raw</a>
+</div>
+
+{% if has_filters or window %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-funnel me-1"></i>Filters</span>
+  {% if window %}
+  <a href="{{ window.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
+    <span class="chip-window" data-from="{{ window.from }}" data-to="{{ window.to }}">Time: {{ window.label }} UTC</span>
+    <i class="bi bi-x-lg ms-1"></i>
+  </a>
+  {% endif %}
+  {% for c in chips %}
+  <a href="{{ c.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
+    {{ c.label }} <i class="bi bi-x-lg ms-1"></i>
+  </a>
+  {% endfor %}
+  <a href="{{ base }}" class="small text-decoration-none ms-1">Clear all</a>
+</div>
+{% endif %}
+
+{% if kpis.lines == 0 %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-search fs-2 d-block mb-2"></i>
+      No log lines in the selected time range or filter.
+    </div>
+  </div>
+{% else %}
+
+<div class="row row-cols-2 row-cols-md-3 row-cols-xl-6 g-3 mb-4">
+  <div class="col">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-list-ul me-1"></i>Lines</h6>
+      <div class="stat-value">{{ kpis.lines }}</div>
+    </div></div>
+  </div>
+  <div class="col">
+    <a href="{{ kpis.failed_href }}" class="card h-100 text-decoration-none text-reset {% if kpis.failed_logins > 0 %}border-danger{% endif %}"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-x-octagon me-1"></i>Failed logins</h6>
+      <div class="stat-value {% if kpis.failed_logins > 0 %}text-danger{% endif %}">{{ kpis.failed_logins }}</div>
+    </div></a>
+  </div>
+  <div class="col">
+    <a href="{{ kpis.attackers_href }}" class="card h-100 text-decoration-none text-reset"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-crosshair me-1"></i>Attacking IPs</h6>
+      <div class="stat-value">{{ kpis.attackers }}</div>
+    </div></a>
+  </div>
+  <div class="col">
+    <a href="{{ kpis.invalid_href }}" class="card h-100 text-decoration-none text-reset"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-person-x me-1"></i>Invalid users</h6>
+      <div class="stat-value">{{ kpis.invalid_users }}</div>
+      <div class="text-secondary small">names tried</div>
+    </div></a>
+  </div>
+  <div class="col">
+    <a href="{{ kpis.logins_href }}" class="card h-100 text-decoration-none text-reset"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-box-arrow-in-right me-1"></i>Logins</h6>
+      <div class="stat-value">{{ kpis.logins }}</div>
+    </div></a>
+  </div>
+  <div class="col">
+    <a href="{{ kpis.sudo_href }}" class="card h-100 text-decoration-none text-reset {% if kpis.refused > 0 %}border-warning{% endif %}"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-shield-lock me-1"></i>sudo</h6>
+      <div class="stat-value">{{ kpis.sudo }}</div>
+      {% if kpis.refused > 0 %}<div class="text-warning small">{{ kpis.refused }} refused</div>{% endif %}
+    </div></a>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3">Lines over time <span class="text-secondary">({{ range_label }})</span></h6>
+    <div class="tl-chart" data-tl-gran="{{ tl_gran }}">
+      <div class="tl-yaxis">
+        <span>{{ timeline_max }}</span>
+        {% if timeline_max > 1 %}<span>{{ timeline_mid }}</span>{% endif %}
+        <span>0</span>
+      </div>
+      <div class="tl-plot">
+        <div class="tl-bars">
+          {% for b in timeline %}
+          <a class="col" href="{{ b.href }}" data-bs-toggle="tooltip" data-ts="{{ b.ts_epoch }}"
+             data-count="{{ b.count }}"
+             title="{{ b.label }} — {{ b.count }} lines (click to filter to this period)">
+            <div class="bar stack" style="height:{{ b.pct }}%">
+              {% for s in b.segments %}
+              <div class="seg {{ s.css }}" style="height:{{ s.share }}%"></div>
+              {% endfor %}
+            </div>
+          </a>
+          {% endfor %}
+        </div>
+        <div class="tl-xaxis">
+          {% for b in timeline %}<div class="xl" data-ts="{{ b.ts_epoch }}">{{ b.label }}</div>{% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="legend text-secondary mt-3">
+      {% for k in legend %}
+      <span><i class="sw {{ k.css }}"></i>{{ k.label }}</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3">Events <span class="text-secondary">(click to filter)</span></h6>
+    {% for e in events %}
+    <a href="{{ e.href }}" class="d-flex align-items-center mb-2 text-decoration-none text-reset"
+       title="Filter to {{ e.label }}">
+      <div class="fw-semibold" style="width:170px">{{ e.label }}</div>
+      <div class="progress flex-grow-1" role="progressbar" style="height:18px">
+        <div class="progress-bar {{ e.css }}" style="width:{{ e.pct }}%"></div>
+      </div>
+      <div class="text-secondary text-end font-monospace" style="width:72px">{{ e.count }}</div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+{# Who got in. Read this after a burst of failures: a login from an address
+   that was just failing is the line that matters. #}
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-box-arrow-in-right me-1"></i>Recent logins</h6>
+    {% if logins | length == 0 %}
+      <div class="text-secondary small py-2">No successful logins in this range.</div>
+    {% else %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0 events">
+        <thead>
+          <tr class="text-secondary small"><th>Time</th><th>Server</th><th>User</th><th>From</th><th>Country</th><th>Method</th></tr>
+        </thead>
+        <tbody>
+          {% for r in logins %}
+          <tr>
+            <td class="small"><span class="raw-ts" data-ts-utc="{{ r.ts }}">{{ r.ts }}</span></td>
+            <td class="small">{% if r.host_href %}<a href="{{ r.host_href }}" class="text-decoration-none">{{ r.host }}</a>{% endif %}</td>
+            <td class="fw-semibold"><a href="{{ r.user_href }}" class="text-decoration-none">{{ r.user }}</a></td>
+            <td class="font-monospace small"><a href="{{ r.client_href }}" class="text-decoration-none">{{ r.client }}</a></td>
+            <td class="small text-secondary">{{ r.country }}</td>
+            <td class="small text-secondary">{{ r.method }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% include "_worldmap.html" %}
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi bi-crosshair me-1"></i>Attacking IPs <span class="text-secondary">(click to filter)</span></h6>
+        {% if top_attackers | length == 0 %}
+          <div class="text-secondary small py-2">No failed logins in this range.</div>
+        {% else %}
+        <table class="table table-sm table-hover align-middle mb-0">
+          <tbody>
+            {% for r in top_attackers %}
+            <tr>
+              <td class="small text-nowrap">
+                <a href="{{ r.href }}" class="text-decoration-none font-monospace" title="Filter to {{ r.label }}">{{ r.label }}</a>
+                <div class="text-secondary" style="font-size:.72rem">{{ r.note }}</div>
+              </td>
+              <td class="w-100">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar {{ r.css }}" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi bi-person-x me-1"></i>Usernames tried <span class="text-secondary">(click to filter)</span></h6>
+        {% if top_usernames | length == 0 %}
+          <div class="text-secondary small py-2">No failed logins in this range.</div>
+        {% else %}
+        <table class="table table-sm table-hover align-middle mb-0">
+          <tbody>
+            {% for r in top_usernames %}
+            <tr>
+              <td class="font-monospace small truncate w-50">
+                <a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a>
+              </td>
+              <td class="w-50">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar {{ r.css }}" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi bi-globe2 me-1"></i>Attack countries <span class="text-secondary">(click to filter)</span></h6>
+        {% if top_countries | length == 0 %}
+          <div class="text-secondary small py-2">No failed logins in this range.</div>
+        {% else %}
+        <table class="table table-sm table-hover align-middle mb-0">
+          <tbody>
+            {% for r in top_countries %}
+            <tr>
+              <td class="small truncate w-50">
+                <a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a>
+              </td>
+              <td class="w-50">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar {{ r.css }}" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-shield-lock me-1"></i>sudo and su</h6>
+    {% if privilege | length == 0 %}
+      <div class="text-secondary small py-2">No sudo or su in this range.</div>
+    {% else %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0 events">
+        <thead>
+          <tr class="text-secondary small"><th>Time</th><th>Server</th><th>User</th><th>As</th><th>Event</th><th>Command / reason</th></tr>
+        </thead>
+        <tbody>
+          {% for r in privilege %}
+          <tr>
+            <td class="small"><span class="raw-ts" data-ts-utc="{{ r.ts }}">{{ r.ts }}</span></td>
+            <td class="small">{% if r.host_href %}<a href="{{ r.host_href }}" class="text-decoration-none">{{ r.host }}</a>{% endif %}</td>
+            <td class="fw-semibold"><a href="{{ r.user_href }}" class="text-decoration-none">{{ r.user }}</a></td>
+            <td class="small">{{ r.target }}</td>
+            <td class="small">{% if r.failed %}<span class="badge text-bg-warning">{{ r.event }}</span>{% else %}{{ r.event }}{% endif %}</td>
+            <td class="font-monospace small wrap">
+              {% if r.failed and r.method %}<span class="text-warning">{{ r.method }}</span>{% if r.detail %} — {% endif %}{% endif %}{{ r.detail }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-person-gear me-1"></i>Account changes</h6>
+    {% if accounts | length == 0 %}
+      <div class="text-secondary small py-2">No account or group changes in this range.</div>
+    {% else %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0 events">
+        <thead>
+          <tr class="text-secondary small"><th>Time</th><th>Server</th><th>Program</th><th>Change</th></tr>
+        </thead>
+        <tbody>
+          {% for r in accounts %}
+          <tr>
+            <td class="small"><span class="raw-ts" data-ts-utc="{{ r.ts }}">{{ r.ts }}</span></td>
+            <td class="small">{% if r.host_href %}<a href="{{ r.host_href }}" class="text-decoration-none">{{ r.host }}</a>{% endif %}</td>
+            <td class="small text-secondary">{{ r.method }}</td>
+            <td class="font-monospace small wrap">{{ r.detail }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi bi-hdd-rack me-1"></i>Servers <span class="text-secondary">(click to filter)</span></h6>
+        <table class="table table-sm table-hover align-middle mb-0">
+          <tbody>
+            {% for r in top_hosts %}
+            <tr>
+              <td class="small truncate w-50">
+                <a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a>
+              </td>
+              <td class="w-50">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:64px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi bi-gear me-1"></i>Programs <span class="text-secondary">(click to filter)</span></h6>
+        <table class="table table-sm table-hover align-middle mb-0">
+          <tbody>
+            {% for r in top_programs %}
+            <tr>
+              <td class="font-monospace small truncate w-50">
+                <a href="{{ r.href }}" class="text-decoration-none" title="Filter to {{ r.label }}">{{ r.label }}</a>
+              </td>
+              <td class="w-50">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar bg-primary" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:64px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="text-secondary small mt-4 mb-0">
+  Times are when EasyLog received each line. One SSH attempt can log several lines
+  (invalid user, failed password, a disconnect), so <em>Failed logins</em> counts only
+  rejected authentications and <em>Attacking IPs</em> counts addresses.
+  IP geolocation by <a href="https://db-ip.com" class="text-secondary" rel="noopener">DB-IP</a> (CC BY 4.0).
+</p>
+
+{% endif %}{# lines == 0 #}
+{% endif %}{# not has_data #}
+{% endblock %}

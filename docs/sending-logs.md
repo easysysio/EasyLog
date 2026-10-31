@@ -84,6 +84,21 @@ Point the host's log file at EasyLog's syslog port with `rsyslog`'s `imfile` mod
 
     Delivery is deliberately fire-and-forget — EasyWAF drops lines rather than blocking its own request path — so treat the counts as what arrived, not as a guaranteed tally of every request served. Several appliances can send to one EasyLog; each event keeps the address it came from, which is what the per-appliance table is built on.
 
+=== "Linux"
+
+    Forward the server's whole syslog stream — EasyLog keeps every line, so there is nothing to filter on the sending side. Register the server as a source of type **Linux**, then on the server create `/etc/rsyslog.d/90-easylog.conf`:
+
+    ```
+    # UDP; use @@EASYLOG_IP:514 for TCP
+    *.* @EASYLOG_IP:514
+    ```
+
+    …and `sudo systemctl restart rsyslog`. On a journald-only system, install `rsyslog` first (it reads the journal), or set `ForwardToSyslog=yes` in `/etc/systemd/journald.conf`.
+
+    Every line is stored with its program and PID. SSH logins (accepted, failed, invalid user, dropped before authentication), sudo and su (including refusals), PAM authentication failures for other services, and account changes (`useradd`, `usermod`, `passwd`, …) are also read into structured fields for the dashboard. Both the classic BSD syslog header and RFC 5424 work.
+
+    A central rsyslog relay forwarding many servers from one address works too: the dashboard groups by the hostname each server put in its syslog header.
+
 === "HAProxy"
 
     HAProxy speaks syslog natively — no `imfile` needed. In `haproxy.cfg`:

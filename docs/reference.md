@@ -1,7 +1,7 @@
 # Reference
 
 ## Supported log types
-Dashboards are grouped into **Web**, **Firewalls**, **WAF** and **General**; each group gets a layout suited to the question it answers — response times for web logs, what got blocked and where it came from for firewalls, and what the policy *let through* for the WAF.
+Dashboards are grouped into **Web**, **Firewalls**, **WAF**, **Systems** and **General**; each group gets a layout suited to the question it answers — response times for web logs, what got blocked and where it came from for firewalls, what the policy *let through* for the WAF, and who tried to get in — and who did — for servers.
 
 | Log source | Format | Dashboard highlights |
 |---|---|---|
@@ -13,6 +13,7 @@ Dashboards are grouped into **Web**, **Firewalls**, **WAF** and **General**; eac
 | **Cisco ASA** | ASA syslog message IDs | Deny rate, allow/deny split, top sources/destinations/ports, top access-lists |
 | **Palo Alto** | PAN-OS TRAFFIC log | The above **plus** top applications (App-ID) and security rules |
 | **EasyWAF** | logfmt event log (0.9.0+) | Verdicts stacked over time, **Served anyway** (would block / challenge), per-appliance split, top rules fired, top clients |
+| **Linux** | syslog (BSD or RFC 5424), every line | Failed logins, attacking IPs, usernames tried, failed-login map, **recent successful logins**, sudo/su (with refusals), account changes, busiest servers and programs |
 | **General logs** | anything, unparsed | Lines over time, top senders/hostnames/tags, full-text search, raw lines |
 
 !!! tip "Adding more types is by design"
@@ -22,12 +23,13 @@ Dashboards are grouped into **Web**, **Firewalls**, **WAF** and **General**; eac
 
 ```mermaid
 graph TD
-    A["Log sources: web servers, firewalls, EasyWAF, anything else"] -->|"syslog UDP/TCP :514"| B["EasyLog ingest engine (Rust / Axum)"]
+    A["Log sources: web servers, firewalls, EasyWAF, Linux servers, anything else"] -->|"syslog UDP/TCP :514"| B["EasyLog ingest engine (Rust / Axum)"]
     B -->|"route by source IP"| C{"Log type"}
     C -->|"apache · nginx"| D["Combined-format parser"]
     C -->|"caddy · traefik · haproxy"| E["Access-log parsers"]
     C -->|"cisco_asa · panos"| F["Firewall parsers"]
     C -->|"easywaf"| W["logfmt parser"]
+    C -->|"linux"| L["sshd · sudo · su · PAM · account parser"]
     C -->|"syslog"| R["General: raw lines"]
     D --> G[("DuckDB (columnar store)")]
     E --> G

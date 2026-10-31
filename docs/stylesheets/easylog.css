@@ -22,6 +22,8 @@ body:has(.es-home) .md-footer {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
 }
+/* An odd card out (the catch-all type) spans the row instead of sitting alone. */
+.el-type-wide { grid-column: 1 / -1; }
 
 .el-type {
   display: flex;
