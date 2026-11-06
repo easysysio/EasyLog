@@ -47,6 +47,7 @@ mod panos;
 mod proxy;
 mod rawview;
 mod traefik;
+mod unifi;
 
 // Web assets compiled into the binary so the UI is served with no static/
 // directory on disk (single self-contained binary).
@@ -78,6 +79,7 @@ pub async fn serve(state: Arc<AppState>) -> anyhow::Result<()> {
         .route("/web/haproxy", get(haproxy::dashboard))
         .route("/firewall/cisco_asa", get(cisco_asa::dashboard))
         .route("/firewall/panos", get(panos::dashboard))
+        .route("/firewall/unifi", get(unifi::dashboard))
         .route("/waf/easywaf", get(easywaf::dashboard))
         .route("/system/linux", get(linux::dashboard))
         .route("/general/syslog", get(general::dashboard))

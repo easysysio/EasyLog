@@ -12,6 +12,7 @@ Dashboards are grouped into **Web**, **Firewalls**, **WAF**, **Systems** and **G
 | **Traefik** | JSON access log | The above **plus** top routers/services and **avg & p95 request duration** |
 | **Cisco ASA** | ASA syslog message IDs | Deny rate, allow/deny split, top sources/destinations/ports, top access-lists |
 | **Palo Alto** | PAN-OS TRAFFIC log | The above **plus** top applications (App-ID) and security rules |
+| **UniFi Gateway** | iptables firewall log (rules with syslog logging on) | The Cisco ASA view **plus** top firewall rules and chains (`WAN_IN`, `WAN_LOCAL`, …) |
 | **EasyWAF** | logfmt event log (0.9.0+) | Verdicts stacked over time, **Served anyway** (would block / challenge), per-appliance split, top rules fired, top clients |
 | **Linux** | syslog (BSD or RFC 5424), every line | Failed logins, attacking IPs, usernames tried, failed-login map, **recent successful logins**, sudo/su (with refusals), account changes, busiest servers and programs |
 | **General logs** | anything, unparsed | Lines over time, top senders/hostnames/tags, full-text search, raw lines |
@@ -27,7 +28,7 @@ graph TD
     B -->|"route by source IP"| C{"Log type"}
     C -->|"apache · nginx"| D["Combined-format parser"]
     C -->|"caddy · traefik · haproxy"| E["Access-log parsers"]
-    C -->|"cisco_asa · panos"| F["Firewall parsers"]
+    C -->|"cisco_asa · panos · unifi"| F["Firewall parsers"]
     C -->|"easywaf"| W["logfmt parser"]
     C -->|"linux"| L["sshd · sudo · su · PAM · account parser"]
     C -->|"syslog"| R["General: raw lines"]

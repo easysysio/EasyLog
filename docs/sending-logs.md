@@ -78,6 +78,15 @@ Point the host's log file at EasyLog's syslog port with `rsyslog`'s `imfile` mod
 
     In **Device → Server Profiles → Syslog**, add a profile pointing at `EASYLOG_IP:514` (UDP), then attach it to a **Log Forwarding** profile for **Traffic** logs and reference that profile from your security rules. EasyLog parses TRAFFIC records; THREAT, SYSTEM and CONFIG logs are ignored.
 
+=== "UniFi Gateway"
+
+    UniFi gateways (UDM, UDM Pro/SE, UCG, UXG and the older USG) log firewall decisions only for rules that have logging turned on, so there are two settings, both in the UniFi Network application. Menu names move between Network versions; these are the current ones.
+
+    1. **Send syslog to EasyLog.** In **Settings → CyberSecure → Traffic Logging**, enable **Activity Logging (Syslog)**, choose **SIEM Server**, and enter `EASYLOG_IP` and port `514`. (Older versions: **Settings → System → Advanced → Remote Syslog Server**.)
+    2. **Log the rules you care about.** Edit each firewall rule or policy you want to see and turn on **Syslog Logging**. The built-in "block all" rules at the end of each chain are the usual place to start: they show what was dropped from the internet.
+
+    Register the gateway's address as a source of type **UniFi Gateway**. Each logged packet becomes one event: its verdict (accept, or drop / reject / block), the rule — by the name typed in UniFi when the firmware includes it, otherwise by chain and number such as `WAN_IN-2000` — and the chain it sits in (`WAN_IN` for traffic passing through the gateway, `WAN_LOCAL` for traffic aimed at the gateway itself). Both the newer `[WAN_LOCAL-D-…]` and older `[WAN_IN-2000-D]` log prefixes are read, IPv4 and IPv6 alike. The gateway's other messages (DHCP, system) are counted as unparsed and not stored.
+
 === "EasyWAF"
 
     EasyWAF ships its event log itself: point `syslog_host` / `syslog_port` in its `config.toml` at EasyLog, register the appliance as a source of type **EasyWAF**, and every proxied request arrives as one line carrying its verdict, score and the rules that fired.

@@ -111,7 +111,7 @@ Get started
 <span class="es-kicker">Firewalls</span>
 <h3 class="es-h3">What was denied, and from where</h3>
 <p class="es-product-text">A deny rate and the allow/deny split, top sources, destinations and ports, the rule that decided, and the application wherever PAN-OS identifies one.</p>
-<div class="es-tags"><span class="es-tag">Cisco ASA</span><span class="es-tag">Palo Alto PAN-OS</span></div>
+<div class="es-tags"><span class="es-tag">Cisco ASA</span><span class="es-tag">Palo Alto PAN-OS</span><span class="es-tag">UniFi Gateway</span></div>
 </div>
 <div class="es-card el-type">
 <div class="el-type-top">
@@ -209,7 +209,7 @@ Get started
 <text class="a-lane" x="300" y="14">EASYLOG</text>
 <text class="a-lane" x="900" y="14">YOU</text>
 <g class="a-ext"><rect x="0" y="46" width="220" height="76" rx="10"></rect><text class="a-title" x="20" y="78">Web servers &amp; proxies</text><text class="a-sub" x="20" y="102">Nginx · Apache · Caddy</text></g>
-<g class="a-ext"><rect x="0" y="182" width="220" height="76" rx="10"></rect><text class="a-title" x="20" y="214">Firewalls</text><text class="a-sub" x="20" y="238">Cisco ASA · PAN-OS</text></g>
+<g class="a-ext"><rect x="0" y="182" width="220" height="76" rx="10"></rect><text class="a-title" x="20" y="214">Firewalls</text><text class="a-sub" x="20" y="238">Cisco ASA · PAN-OS · UniFi</text></g>
 <g class="a-es"><rect x="0" y="318" width="220" height="88" rx="10"></rect><text class="a-title" x="22" y="354">EasyWAF</text><text class="a-sub" x="22" y="380">event log · logfmt</text></g>
 <g class="a-es"><rect x="300" y="30" width="560" height="386" rx="14"></rect><text class="a-title" x="324" y="66">EasyLog</text><text class="a-sub" x="324" y="90">one binary · syslog :514 UDP/TCP</text></g>
 <g class="a-box"><rect x="324" y="132" width="150" height="80" rx="10"></rect><text class="a-title" x="340" y="164">Route</text><text class="a-sub" x="340" y="188">by source IP</text></g>

@@ -28,6 +28,7 @@ pub mod haproxy;
 pub mod linux;
 pub mod nginx;
 pub mod panos;
+pub mod unifi;
 pub mod traefik;
 
 // Envelope metadata extracted from the syslog layer, passed to every parser.
@@ -191,6 +192,8 @@ impl Registry {
         types.insert(cisco_asa.name(), Box::new(cisco_asa));
         let panos = panos::PanOs;
         types.insert(panos.name(), Box::new(panos));
+        let unifi = unifi::UniFi;
+        types.insert(unifi.name(), Box::new(unifi));
         let easywaf = easywaf::EasyWaf;
         types.insert(easywaf.name(), Box::new(easywaf));
         let linux = linux::Linux;

@@ -66,8 +66,9 @@ Supported log types:
 * **Web** — **Apache** (Common/Combined Log Format), **nginx** (combined access
   logs), **Caddy** (JSON access logs), **HAProxy** (`option httplog`) and
   **Traefik** (JSON access logs).
-* **Firewalls** — **Cisco ASA** (syslog message IDs) and **Palo Alto / PAN-OS**
-  (TRAFFIC logs), on a dashboard built around the allow/deny split.
+* **Firewalls** — **Cisco ASA** (syslog message IDs), **Palo Alto / PAN-OS**
+  (TRAFFIC logs) and **UniFi gateways** (iptables firewall logs), on a dashboard
+  built around the allow/deny split.
 * **WAF** — **EasyWAF** (logfmt event log), on a dashboard built around the
   verdict: what was blocked, and — separately — what was **served that an
   enforcing policy would have refused**, with the rules that fired and the same
@@ -287,6 +288,7 @@ registry, so adding a type adds its entry automatically.
 | `GET /web/traefik` | Traefik dashboard |
 | `GET /firewall/cisco_asa` | Cisco ASA dashboard |
 | `GET /firewall/panos` | Palo Alto dashboard |
+| `GET /firewall/unifi` | UniFi Gateway dashboard |
 | `GET /waf/easywaf` | EasyWAF dashboard |
 | `GET /system/linux` | Linux dashboard |
 | `GET /sources` | Manage log sources |

@@ -9,7 +9,7 @@
 // logtype/firewall.rs).
 //
 // Vendors supply a `Spec` describing their table, route and labelling, plus any
-// extra dimension they alone have (PAN-OS applications, say). Geolocation is on
+// extra dimension they alone have (PAN-OS applications, UniFi chains, say). Geolocation is on
 // the source address, so the world map shows where traffic is coming from.
 //
 // Range, drill-downs, search and the window pinned by clicking a timeline bar
@@ -83,6 +83,9 @@ pub(crate) struct Filter {
     country: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     application: Option<String>,
+    /// Vendor event identity (the UniFi chain), for vendors that panel it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    event_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     range: Option<String>,
     /// Pinned window from clicking a timeline bar: UTC epoch seconds, half-open
@@ -124,6 +127,7 @@ impl Filter {
             rule: clean(self.rule),
             country: clean(self.country),
             application: clean(self.application),
+            event_type: clean(self.event_type),
             range,
             q: clean(self.q),
             from: self.from,
@@ -196,6 +200,7 @@ impl Filter {
     fn extra(&self, key: &str) -> Option<&String> {
         match key {
             "application" => self.application.as_ref(),
+            "event_type" => self.event_type.as_ref(),
             "rule" => self.rule.as_ref(),
             _ => None,
         }
@@ -205,6 +210,7 @@ impl Filter {
         let mut next = self.clone();
         match key {
             "application" => next.application = value,
+            "event_type" => next.event_type = value,
             "rule" => next.rule = value,
             _ => {}
         }

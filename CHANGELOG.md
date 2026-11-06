@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **UniFi Gateway log type, under Firewalls.** Point a UniFi gateway's remote
+  syslog (UDM, UDM Pro/SE, UCG, UXG, USG) at EasyLog, turn on syslog logging
+  for the firewall rules to watch, and register it as type **UniFi Gateway**.
+  Each logged packet is read from its iptables log line: the verdict (accept,
+  or drop / reject / block), source and destination with ports, protocol, the
+  in/out interfaces, the rule (by its UniFi name when the firmware includes
+  `DESCR`, otherwise chain and number) and the chain. Both the newer
+  `[WAN_LOCAL-D-…]` and older `[WAN_IN-2000-D]` prefixes work, IPv4 and IPv6.
+- **The UniFi dashboard at `/firewall/unifi`** is the shared firewall view —
+  deny rate, allow/deny split, top sources, destinations, ports and countries,
+  world map — plus **Top firewall rules** and **Top chains**, each clickable to
+  filter. Chains tell traffic through the gateway (`WAN_IN`) from traffic aimed
+  at the gateway itself (`WAN_LOCAL`).
+
 ## [0.10.0] — 2026-10-31
 
 ### Added
