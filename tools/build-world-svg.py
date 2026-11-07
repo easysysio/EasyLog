@@ -186,9 +186,12 @@ def path_data(polygons, arcs):
 def main():
     if len(sys.argv) != 3:
         sys.exit(f"usage: {sys.argv[0]} <countries-110m.json> <out.svg>")
+    # Both paths are the developer's own command-line arguments (this tool runs
+    # by hand, never on untrusted input), so they are used as given.
     src, dest = sys.argv[1], sys.argv[2]
 
-    topology = json.load(open(src))
+    with open(src, encoding="utf-8") as f:
+        topology = json.load(f)
     arcs = decode_arcs(topology)
     numeric_to_alpha2 = build_iso_table()
 
@@ -227,7 +230,7 @@ def main():
         f"<!-- Country boundaries: Natural Earth (public domain), 110m, via world-atlas. -->\n"
         f"{body}\n</svg>\n"
     )
-    with open(dest, "w") as f:
+    with open(dest, "w", encoding="utf-8") as f:
         f.write(svg)
     print(f"{dest}: {len(paths)} countries, {len(svg) / 1024:.1f} KB")
 
