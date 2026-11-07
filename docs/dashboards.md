@@ -21,6 +21,8 @@ Spotted a spike at 2am? **Click the bar.** The whole dashboard — KPIs, charts,
 
 The pinned period appears as a removable chip (in your local timezone, like the timeline labels), stacks with search and every drill-down filter, and lives in the URL as `?from=&to=` epoch seconds — so a zoomed-in view is as shareable as any other. Removing the chip, or picking a time range, returns to the plain range.
 
+On the firewall dashboards, an event is placed at the firewall's own timestamp when that agrees with when EasyLog received it (to within 10 minutes), and at the arrival time otherwise — so a firewall logging its local time, or one with a wrong clock, still lines up with everything else.
+
 ## From charts to the actual lines
 
 Every dashboard has a **Raw** button. It replaces the charts with the log lines behind them — newest first — and the **Dashboard** button switches back. It's a mode of the dashboard rather than a separate page, so the time range, every drill-down filter and the search term still apply: narrow to what you're investigating, hit Raw, and you're looking at exactly those events as the device sent them. The URL carries `view=raw`, so that stays shareable too.

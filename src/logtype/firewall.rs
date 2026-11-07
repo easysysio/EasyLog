@@ -9,13 +9,23 @@
 //
 // Geolocation is resolved on the **source** address: on a firewall the question
 // is where traffic is coming from.
+//
+// A device's own timestamp is trusted only when it agrees with the arrival time
+// to within MAX_CLOCK_SKEW. ASA and PAN-OS stamp their *local* time with no
+// zone, and any device can have a wrong clock; either would put events hours
+// off on the timeline, so those fall back to when EasyLog received the line.
 // =============================================================================
 
 use anyhow::Result;
-use chrono::NaiveDateTime;
+use chrono::{Duration, NaiveDateTime};
 use duckdb::{Connection, params};
 
 use super::Meta;
+
+/// How far a device's timestamp may be from the arrival time and still be used.
+/// Syslog arrives within seconds; anything further off is a wrong clock or a
+/// local time with no zone.
+const MAX_CLOCK_SKEW: Duration = Duration::minutes(10);
 
 /// Normalized outcome. Vendors spell this many ways ("Deny", "denied", "drop",
 /// "reset-both"); dashboards only care whether the traffic got through.
@@ -97,9 +107,23 @@ pub fn init_schema(conn: &Connection, table: &str) -> Result<()> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// event_time(device, received)
+// The time to file an event under: the device's own timestamp when it is within
+// MAX_CLOCK_SKEW of the arrival time (it is the more precise of the two),
+// otherwise the arrival time.
+// ─────────────────────────────────────────────────────────────────────────────
+fn event_time(device: Option<NaiveDateTime>, received: NaiveDateTime) -> NaiveDateTime {
+    match device {
+        Some(ts) if (ts - received).abs() <= MAX_CLOCK_SKEW => ts,
+        _ => received,
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // insert(conn, table, event, meta, raw)
 // Stores one parsed event, resolving the source address to a country as it goes.
-// Falls back to the arrival time when the line carried no usable timestamp.
+// Files it under the device's time when that is trustworthy, else the arrival
+// time (see event_time).
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn insert(
     conn: &Connection,
@@ -109,7 +133,7 @@ pub fn insert(
     raw: &str,
 ) -> Result<()> {
     let (country_code, country) = crate::geo::lookup(&event.src_ip);
-    let ts = event.ts.unwrap_or_else(|| meta.received_at.naive_utc());
+    let ts = event_time(event.ts, meta.received_at.naive_utc());
     conn.execute(
         &format!(
             r#"INSERT INTO {table}
@@ -140,4 +164,26 @@ pub fn insert(
         ],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn at(s: &str) -> NaiveDateTime {
+        NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f").unwrap()
+    }
+
+    #[test]
+    fn trusts_a_device_clock_only_when_it_agrees() {
+        let received = at("2026-11-07 09:00:00.0");
+        // A few seconds early or late: the device's own, more precise, time.
+        assert_eq!(event_time(Some(at("2026-11-07 08:59:58.4")), received), at("2026-11-07 08:59:58.4"));
+        assert_eq!(event_time(Some(at("2026-11-07 09:09:59.0")), received), at("2026-11-07 09:09:59.0"));
+        // A local time two hours ahead of UTC, or a clock far off: arrival time.
+        assert_eq!(event_time(Some(at("2026-11-07 11:00:00.0")), received), received);
+        assert_eq!(event_time(Some(at("2025-01-01 00:00:00.0")), received), received);
+        // No timestamp at all.
+        assert_eq!(event_time(None, received), received);
+    }
 }

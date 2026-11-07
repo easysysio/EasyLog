@@ -26,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   named `[Plex] …` keeps its bracket. Rows already stored are renamed once at
   startup, so the rules panel doesn't list each rule twice.
 
+### Fixed
+- **Firewall events from a device with a wrong clock — or a local time — no
+  longer land hours off on the timeline.** Cisco ASA and Palo Alto stamp their
+  local time with no zone, which EasyLog stored as UTC, so on a firewall not set
+  to UTC every event sat hours away from when it happened. A device's own
+  timestamp is now used only when it is within 10 minutes of when EasyLog
+  received the line (it is the more precise of the two); otherwise the arrival
+  time is used. This applies to every firewall type, including UniFi's
+  IDS/IPS events. Rows already stored keep their time.
+
 ## [0.11.1] — 2026-11-07
 
 ### Added
