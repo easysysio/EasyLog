@@ -184,7 +184,8 @@ can copy `target/release/easylog` anywhere and run it without any other files.
 ## Configuration
 
 EasyLog reads `config/easylog.toml` by default (override the path with the
-`EASYLOG_CONFIG` environment variable):
+`EASYLOG_CONFIG` environment variable). The only command-line options are
+`--version` and `--help`:
 
 ```toml
 syslog_bind = "0.0.0.0"   # address the UDP+TCP listeners bind to

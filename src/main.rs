@@ -7,6 +7,9 @@
 // syslog listeners (UDP + TCP) and the Axum web server over shared state. The
 // web templates and static assets are compiled in, so EasyLog runs as a single
 // self-contained binary with nothing to install alongside it.
+//
+// The only command-line arguments are --help and --version; settings come from
+// the config file named by EASYLOG_CONFIG.
 // =============================================================================
 
 mod auth;
@@ -34,6 +37,43 @@ use crate::state::AppState;
 
 // Default config path; overridable via the EASYLOG_CONFIG env var.
 const DEFAULT_CONFIG: &str = "config/easylog.toml";
+
+// What --help prints. EasyLog takes no other arguments: everything is in the
+// config file.
+const USAGE: &str = "\
+Usage: easylog [--help | --version]
+
+EasyLog collects syslog and serves a dashboard per log type. It takes no other
+arguments: settings live in a TOML config file, read from the path in the
+EASYLOG_CONFIG environment variable (default: config/easylog.toml). The
+packaged service uses /etc/easylog/easylog.toml.
+
+  -h, --help       print this help and exit
+  -V, --version    print the version and exit";
+
+/// What the command line asks for.
+#[derive(Debug, PartialEq, Eq)]
+enum Cli {
+    Run,
+    Help,
+    Version,
+    Unknown(String),
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// parse_args(args)
+// Reads the command line (without the program name). No argument runs the
+// server; anything unrecognized is reported rather than ignored, so a mistyped
+// flag can't quietly start a second instance.
+// ─────────────────────────────────────────────────────────────────────────────
+fn parse_args(mut args: impl Iterator<Item = String>) -> Cli {
+    match args.next().as_deref() {
+        None => Cli::Run,
+        Some("-h" | "--help") => Cli::Help,
+        Some("-V" | "--version") => Cli::Version,
+        Some(other) => Cli::Unknown(other.to_string()),
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // load_templates()
@@ -77,6 +117,22 @@ fn load_templates() -> Result<Tera> {
 // ─────────────────────────────────────────────────────────────────────────────
 #[tokio::main]
 async fn main() -> Result<()> {
+    match parse_args(std::env::args().skip(1)) {
+        Cli::Run => {}
+        Cli::Help => {
+            println!("{USAGE}");
+            return Ok(());
+        }
+        Cli::Version => {
+            println!("easylog {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
+        Cli::Unknown(arg) => {
+            eprintln!("easylog: unknown argument '{arg}'\n\n{USAGE}");
+            std::process::exit(2);
+        }
+    }
+
     // The config decides where logs go, so it is read before the subscriber is
     // installed; anything that goes wrong here is reported by the returned error.
     let config_path = std::env::var("EASYLOG_CONFIG").unwrap_or_else(|_| DEFAULT_CONFIG.to_string());
@@ -142,4 +198,24 @@ async fn main() -> Result<()> {
     )?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cli(args: &[&str]) -> Cli {
+        parse_args(args.iter().map(|a| a.to_string()))
+    }
+
+    #[test]
+    fn reads_the_command_line() {
+        assert_eq!(cli(&[]), Cli::Run);
+        assert_eq!(cli(&["--help"]), Cli::Help);
+        assert_eq!(cli(&["-h"]), Cli::Help);
+        assert_eq!(cli(&["--version"]), Cli::Version);
+        assert_eq!(cli(&["-V"]), Cli::Version);
+        assert_eq!(cli(&["--port"]), Cli::Unknown("--port".into()));
+        assert_eq!(cli(&["serve"]), Cli::Unknown("serve".into()));
+    }
 }

@@ -1,6 +1,6 @@
 # Configuration
 
-EasyLog reads `/etc/easylog/easylog.toml` (override the path with the `EASYLOG_CONFIG` environment variable):
+EasyLog reads `/etc/easylog/easylog.toml` (override the path with the `EASYLOG_CONFIG` environment variable). It takes no command-line options beyond `easylog --version`, which prints the installed version, and `easylog --help`:
 
 ```toml
 syslog_bind = "0.0.0.0"   # address the UDP + TCP listeners bind to

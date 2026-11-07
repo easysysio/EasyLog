@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`easylog --version` and `easylog --help`.** Previously any argument was
+  ignored and the server started — so checking the installed version started a
+  second instance. Now `--version` (`-V`) prints the version, `--help` (`-h`)
+  explains where the config comes from, and anything else is an error (exit 2).
+
 ## [0.11.1] — 2026-11-07
 
 ### Added
