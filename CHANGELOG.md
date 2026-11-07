@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   second instance. Now `--version` (`-V`) prints the version, `--help` (`-h`)
   explains where the config comes from, and anything else is an error (exit 2).
 
+### Changed
+- **UniFi discovery broadcasts are no longer stored.** A UniFi gateway
+  announces itself on each network with a UDP broadcast to port 10001, and each
+  network's "Block All" rule logs it several times a minute — most of a typical
+  gateway's firewall log. Exactly those lines are now skipped at ingest
+  (counted as unparsed); other broadcasts and other traffic to port 10001 are
+  kept. Rows already stored stay until retention removes them.
+
 ## [0.11.1] — 2026-11-07
 
 ### Added

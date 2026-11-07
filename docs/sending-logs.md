@@ -92,8 +92,8 @@ Point the host's log file at EasyLog's syslog port with `rsyslog`'s `imfile` mod
 
     Each threat detection arrives in CEF and becomes one event too: source and destination with ports, the application (`SMTP`, `HTTPS`), the IPS signature as the rule, "Threat Detected" in the chain's place, the zone, and the time the gateway recorded. An IDS in detect-only mode reports these as **allowed** — the traffic got through — and they only show as denies once **Intrusion Prevention** blocks them.
 
-    !!! tip "Expect some self-inflicted blocks"
-        The gateway's own UniFi discovery broadcasts (UDP port `10001` to `255.255.255.255`) are logged by the "Block All" rule of each network it serves. Click another port, or filter on a chain, to see past them.
+    !!! note "Discovery broadcasts are skipped"
+        The gateway announces itself on every network it serves with a UniFi discovery broadcast (UDP port `10001` to `255.255.255.255`), and each network's "Block All" rule logs it — several times a minute. EasyLog drops exactly those lines (they count as unparsed), so they don't bury the blocks worth seeing. Other broadcasts, and ordinary traffic to port 10001, are kept.
 
 === "EasyWAF"
 

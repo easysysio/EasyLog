@@ -17,6 +17,9 @@
 // Verdicts are A (accept), D (drop), R (reject) and B (block). A prefix with any
 // other verdict (a NAT or return marker) is not an allow/deny decision and is
 // left unparsed, as are the gateway's other messages (DHCP, system, …).
+// So are the gateway's own UniFi discovery broadcasts (UDP 10001 to
+// 255.255.255.255), which each network's "Block All" rule logs every few
+// seconds and which would otherwise bury the blocks worth seeing.
 // The rest of the line is iptables' KEY=value fields; DESCR, when present, is
 // the rule's name as typed in the UniFi UI and is preferred as the rule label.
 //
@@ -114,6 +117,15 @@ fn fields(text: &str) -> Vec<(&str, &str)> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// is_discovery_broadcast(protocol, dst, dst_port)
+// UniFi device discovery: a UDP broadcast to port 10001. Only that exact shape
+// is dropped — other broadcasts and other traffic to 10001 are kept.
+// ─────────────────────────────────────────────────────────────────────────────
+fn is_discovery_broadcast(protocol: &str, dst: &str, dst_port: Option<i32>) -> bool {
+    protocol.eq_ignore_ascii_case("udp") && dst == "255.255.255.255" && dst_port == Some(10001)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // parse_line(line)
 // Parses one UniFi firewall log line into a normalized firewall event, or None
 // for lines that aren't an allow/deny decision.
@@ -129,7 +141,7 @@ pub fn parse_line(line: &str) -> Option<FirewallEvent> {
     let num = |key: &str| get(key).parse::<i32>().ok();
 
     let (src_ip, dst_ip) = (get("SRC"), get("DST"));
-    if src_ip.is_empty() || dst_ip.is_empty() {
+    if src_ip.is_empty() || dst_ip.is_empty() || is_discovery_broadcast(get("PROTO"), dst_ip, num("DPT")) {
         return None;
     }
     let rule = match get("DESCR") {
@@ -503,16 +515,28 @@ mod tests {
         assert_eq!(raw, THREAT, "the stored line is the whole record");
     }
 
-    // A UCG sends its firewall lines with no "kernel:" tag, and its DESCR
-    // carries the chain in brackets (truncated by iptables' prefix limit).
+    // The gateway's own discovery broadcast, as a UCG logs it: no "kernel:"
+    // tag, and a DESCR carrying the chain and cut short.
+    const DISCOVERY: &str = r#"[GUEST_LOCAL-D-2147483647] DESCR="[GUEST_LOCAL]Block All Traff" IN=br99 OUT= MAC=45:00:00:20:67:d3:40:00:40:11:af:50:c0:a8 SRC=192.168.99.1 DST=255.255.255.255 LEN=32 TOS=00 PREC=0x00 TTL=64 ID=26579 DF PROTO=UDP SPT=53350 DPT=10001 LEN=12 MARK=1a0000 "#;
+    // A real block between zones, in the same untagged UCG form.
+    const UCG_BLOCK: &str = r#"[DMZ_LAN-D-2147483647] DESCR="[DMZ_LAN]Block All Traffic" IN=br3 OUT=br0 MAC=74:f9:2c:00:00:01:bc:24:11:00:00:02:08:00 SRC=192.168.3.11 DST=192.168.1.53 LEN=205 TOS=00 PREC=0x00 TTL=63 ID=13602 DF PROTO=UDP SPT=50414 DPT=514 LEN=185 MARK=1a0000 "#;
+
     #[test]
     fn parses_an_untagged_ucg_line() {
-        let line = r#"[GUEST_LOCAL-D-2147483647] DESCR="[GUEST_LOCAL]Block All Traff" IN=br99 OUT= MAC=45:00:00:20:67:d3:40:00:40:11:af:50:c0:a8 SRC=192.168.99.1 DST=255.255.255.255 LEN=32 TOS=00 PREC=0x00 TTL=64 ID=26579 DF PROTO=UDP SPT=53350 DPT=10001 LEN=12 MARK=1a0000 "#;
-        let e = parse_line(line).expect("should parse");
+        let e = parse_line(UCG_BLOCK).expect("should parse");
         assert_eq!(e.action, Action::Deny);
-        assert_eq!(e.event_type, "GUEST_LOCAL");
-        assert_eq!(e.rule, "[GUEST_LOCAL]Block All Traff");
-        assert_eq!(e.dst_port, Some(10001));
+        assert_eq!(e.event_type, "DMZ_LAN");
+        assert_eq!(e.src_zone, "br3");
+        assert_eq!(e.dst_port, Some(514));
+    }
+
+    #[test]
+    fn skips_only_the_discovery_broadcast() {
+        assert!(parse_line(DISCOVERY).is_none());
+        // Other broadcasts, and unicast traffic to 10001, are kept.
+        assert!(parse_line(&DISCOVERY.replace("DPT=10001", "DPT=67")).is_some());
+        assert!(parse_line(&DISCOVERY.replace("DST=255.255.255.255", "DST=192.168.99.20")).is_some());
+        assert!(parse_line(&DISCOVERY.replace("PROTO=UDP", "PROTO=TCP")).is_some());
     }
 
     #[test]
