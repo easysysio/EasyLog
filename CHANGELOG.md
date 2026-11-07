@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gateway's firewall log. Exactly those lines are now skipped at ingest
   (counted as unparsed); other broadcasts and other traffic to port 10001 are
   kept. Rows already stored stay until retention removes them.
+- **UniFi rule names drop the chain UniFi puts in front of them.**
+  `[DMZ_LAN]Block All Traffic` is now `Block All Traffic`; the chain stays in
+  its own panel and filter. Only the line's own chain is removed, so a rule you
+  named `[Plex] …` keeps its bracket. Rows already stored are renamed once at
+  startup, so the rules panel doesn't list each rule twice.
 
 ## [0.11.1] — 2026-11-07
 

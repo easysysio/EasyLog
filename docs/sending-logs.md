@@ -88,7 +88,7 @@ Point the host's log file at EasyLog's syslog port with `rsyslog`'s `imfile` mod
 
     Register the gateway's address — the one it sends from, which may be on a different network from its management address — as a source of type **UniFi Gateway**.
 
-    Each firewall-rule hit becomes one event: its verdict (accept, or drop / reject / block), the rule — by its UniFi name, which UniFi itself prefixes with the chain and cuts short to fit the firewall's log label (`[DMZ_LAN]Block All Traffic`, `[GUEST_LOCAL]Block All Traff`), or by chain and number such as `WAN_IN-2000` on firmware without names — and the chain (`WAN_LOCAL` for traffic aimed at the gateway itself, `DMZ_LAN` from one zone to another, and so on). IPv4 and IPv6 alike.
+    Each firewall-rule hit becomes one event: its verdict (accept, or drop / reject / block), the rule — by its UniFi name (`Block All Traffic`; UniFi cuts long names short to fit the firewall's log label, so some arrive as `Block All Traff`), or by chain and number such as `WAN_IN-2000` on firmware without names — and the chain (`WAN_LOCAL` for traffic aimed at the gateway itself, `DMZ_LAN` from one zone to another, and so on). IPv4 and IPv6 alike.
 
     Each threat detection arrives in CEF and becomes one event too: source and destination with ports, the application (`SMTP`, `HTTPS`), the IPS signature as the rule, "Threat Detected" in the chain's place, the zone, and the time the gateway recorded. An IDS in detect-only mode reports these as **allowed** — the traffic got through — and they only show as denies once **Intrusion Prevention** blocks them.
 

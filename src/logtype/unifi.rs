@@ -22,6 +22,8 @@
 // seconds and which would otherwise bury the blocks worth seeing.
 // The rest of the line is iptables' KEY=value fields; DESCR, when present, is
 // the rule's name as typed in the UniFi UI and is preferred as the rule label.
+// Newer firmware prefixes it with the chain ("[DMZ_LAN]Block All Traffic");
+// that prefix is dropped, since the chain is its own field.
 //
 // The UniFi Network application (9.x and later) also sends events in CEF
 // through its SIEM-server setting:
@@ -117,6 +119,22 @@ fn fields(text: &str) -> Vec<(&str, &str)> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// rule_name(descr, chain)
+// The rule's own name from DESCR, without the "[CHAIN]" UniFi puts in front.
+// Only the line's own chain is removed, so a rule the user named "[Plex] …"
+// keeps its bracket; a DESCR that is nothing but the label is kept whole.
+// ─────────────────────────────────────────────────────────────────────────────
+fn rule_name<'a>(descr: &'a str, chain: &str) -> &'a str {
+    descr
+        .strip_prefix('[')
+        .and_then(|rest| rest.strip_prefix(chain))
+        .and_then(|rest| rest.strip_prefix(']'))
+        .map(str::trim_start)
+        .filter(|name| !name.is_empty())
+        .unwrap_or(descr)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // is_discovery_broadcast(protocol, dst, dst_port)
 // UniFi device discovery: a UDP broadcast to port 10001. Only that exact shape
 // is dropped — other broadcasts and other traffic to 10001 are kept.
@@ -147,7 +165,7 @@ pub fn parse_line(line: &str) -> Option<FirewallEvent> {
     let rule = match get("DESCR") {
         "" if rule_id.is_empty() => chain.to_string(),
         "" => format!("{chain}-{rule_id}"),
-        descr => descr.to_string(),
+        descr => rule_name(descr, chain).to_string(),
     };
     Some(FirewallEvent {
         // Kernel lines carry no clock of their own; arrival time is used.
@@ -327,7 +345,18 @@ impl LogType for UniFi {
     }
 
     fn init_schema(&self, conn: &Connection) -> Result<()> {
-        firewall::init_schema(conn, "unifi")
+        firewall::init_schema(conn, "unifi")?;
+        // Rows stored before 0.11.2 kept UniFi's "[CHAIN]" in front of the rule
+        // name; renaming them keeps the rules panel from listing each rule
+        // twice. Once done, nothing matches and this is a no-op.
+        // The chain is in event_type, so only that exact label is removed.
+        conn.execute_batch(
+            "UPDATE unifi
+             SET rule = ltrim(substr(rule, length(event_type) + 3))
+             WHERE starts_with(rule, '[' || event_type || ']')
+               AND ltrim(substr(rule, length(event_type) + 3)) <> '';",
+        )?;
+        Ok(())
     }
 
     fn ingest(&self, raw: &str, meta: &Meta, conn: &Connection) -> Result<bool> {
@@ -526,8 +555,48 @@ mod tests {
         let e = parse_line(UCG_BLOCK).expect("should parse");
         assert_eq!(e.action, Action::Deny);
         assert_eq!(e.event_type, "DMZ_LAN");
+        assert_eq!(e.rule, "Block All Traffic", "the [DMZ_LAN] prefix is dropped");
         assert_eq!(e.src_zone, "br3");
         assert_eq!(e.dst_port, Some(514));
+    }
+
+    #[test]
+    fn rule_names_lose_only_their_own_chain() {
+        assert_eq!(rule_name("[DMZ_LAN]Block All Traffic", "DMZ_LAN"), "Block All Traffic");
+        assert_eq!(rule_name("[GUEST_LOCAL] Block All Traff", "GUEST_LOCAL"), "Block All Traff");
+        assert_eq!(rule_name("Allow LAN to Internet", "LAN_IN"), "Allow LAN to Internet");
+        // A bracket that isn't this line's chain is part of the user's name.
+        assert_eq!(rule_name("[Plex] port forward", "WAN_IN"), "[Plex] port forward");
+        assert_eq!(rule_name("[DMZ_LAN]Block", "DMZ_LOCAL"), "[DMZ_LAN]Block");
+        // Nothing but the label: kept whole rather than emptied.
+        assert_eq!(rule_name("[WAN_LOCAL]", "WAN_LOCAL"), "[WAN_LOCAL]");
+    }
+
+    #[test]
+    fn renames_rules_stored_with_a_chain_prefix() {
+        let conn = Connection::open_in_memory().unwrap();
+        UniFi.init_schema(&conn).unwrap();
+        for (rule, chain) in [
+            ("[DMZ_LAN]Block All Traffic", "DMZ_LAN"),
+            ("[WAN_LOCAL]", "WAN_LOCAL"),
+            ("Allow LAN", "LAN_IN"),
+            ("[Plex] port forward", "WAN_IN"),
+            ("ET DROP Dshield Block Listed Source group 1", "Threat Detected"),
+        ] {
+            conn.execute("INSERT INTO unifi (rule, event_type) VALUES (?, ?)", [rule, chain]).unwrap();
+        }
+        UniFi.init_schema(&conn).unwrap(); // as at the next startup
+        let rules: Vec<String> = conn
+            .prepare("SELECT rule FROM unifi ORDER BY rule")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(
+            rules,
+            ["Allow LAN", "Block All Traffic", "ET DROP Dshield Block Listed Source group 1", "[Plex] port forward", "[WAN_LOCAL]"]
+        );
     }
 
     #[test]
