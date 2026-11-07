@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-11-07
+
 ### Added
 - **UniFi Gateway log type, under Firewalls.** Point a UniFi gateway's remote
   syslog (UDM, UDM Pro/SE, UCG, UXG, USG) at EasyLog, turn on syslog logging
