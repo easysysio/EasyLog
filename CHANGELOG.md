@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-11-07
+
 ### Added
 - **UniFi IDS/IPS threat detections.** The UniFi Gateway type now also reads
   the CEF events the UniFi Network application sends to a SIEM server, so
