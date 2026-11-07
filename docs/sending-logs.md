@@ -80,12 +80,20 @@ Point the host's log file at EasyLog's syslog port with `rsyslog`'s `imfile` mod
 
 === "UniFi Gateway"
 
-    UniFi gateways (UDM, UDM Pro/SE, UCG, UXG and the older USG) log firewall decisions only for rules that have logging turned on, so there are two settings, both in the UniFi Network application. Menu names move between Network versions; these are the current ones.
+    UniFi gateways (UDM, UDM Pro/SE, UCG, UXG and the older USG) send two kinds of security event, and EasyLog reads both onto one dashboard: **firewall-rule hits** (what a rule blocked or allowed) and **IDS/IPS threat detections**. Both are set up in the UniFi Network application; menu names move between versions.
 
-    1. **Send syslog to EasyLog.** In **Settings → CyberSecure → Traffic Logging**, enable **Activity Logging (Syslog)**, choose **SIEM Server**, and enter `EASYLOG_IP` and port `514`. (Older versions: **Settings → System → Advanced → Remote Syslog Server**.)
-    2. **Log the rules you care about.** Edit each firewall rule or policy you want to see and turn on **Syslog Logging**. The built-in "block all" rules at the end of each chain are the usual place to start: they show what was dropped from the internet.
+    1. **Send syslog to EasyLog.** Find **Activity Logging (Syslog)** (under CyberSecure → Traffic Logging, or System → Advanced, depending on version), choose **SIEM Server**, and enter `EASYLOG_IP` and port `514`.
+    2. **Choose the contents.** Under **Contents**, keep **Firewall Default Policy** (UniFi's built-in "block all" rules) and **Security Detections** (IDS/IPS). Client, device, access-point, switch and update events carry no traffic, so EasyLog only counts them as unparsed — leave them out to save the noise.
+    3. **Log your own rules.** Edit each firewall policy whose hits you want to see and turn on **Syslog Logging**. Block rules are the usual place to start.
 
-    Register the gateway's address as a source of type **UniFi Gateway**. Each logged packet becomes one event: its verdict (accept, or drop / reject / block), the rule — by the name typed in UniFi when the firmware includes it, otherwise by chain and number such as `WAN_IN-2000` — and the chain it sits in (`WAN_IN` for traffic passing through the gateway, `WAN_LOCAL` for traffic aimed at the gateway itself). Both the newer `[WAN_LOCAL-D-…]` and older `[WAN_IN-2000-D]` log prefixes are read, IPv4 and IPv6 alike. The gateway's other messages (DHCP, system) are counted as unparsed and not stored.
+    Register the gateway's address — the one it sends from, which may be on a different network from its management address — as a source of type **UniFi Gateway**.
+
+    Each firewall-rule hit becomes one event: its verdict (accept, or drop / reject / block), the rule — by its UniFi name, which UniFi itself prefixes with the chain and cuts short to fit the firewall's log label (`[DMZ_LAN]Block All Traffic`, `[GUEST_LOCAL]Block All Traff`), or by chain and number such as `WAN_IN-2000` on firmware without names — and the chain (`WAN_LOCAL` for traffic aimed at the gateway itself, `DMZ_LAN` from one zone to another, and so on). IPv4 and IPv6 alike.
+
+    Each threat detection arrives in CEF and becomes one event too: source and destination with ports, the application (`SMTP`, `HTTPS`), the IPS signature as the rule, "Threat Detected" in the chain's place, the zone, and the time the gateway recorded. An IDS in detect-only mode reports these as **allowed** — the traffic got through — and they only show as denies once **Intrusion Prevention** blocks them.
+
+    !!! tip "Expect some self-inflicted blocks"
+        The gateway's own UniFi discovery broadcasts (UDP port `10001` to `255.255.255.255`) are logged by the "Block All" rule of each network it serves. Click another port, or filter on a chain, to see past them.
 
 === "EasyWAF"
 

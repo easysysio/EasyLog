@@ -19,12 +19,25 @@
 // left unparsed, as are the gateway's other messages (DHCP, system, …).
 // The rest of the line is iptables' KEY=value fields; DESCR, when present, is
 // the rule's name as typed in the UniFi UI and is preferred as the rule label.
+//
+// The UniFi Network application (9.x and later) also sends events in CEF
+// through its SIEM-server setting:
+//
+//   CEF:0|Ubiquiti|UniFi Network|10.6.109|200|Threat Detected|7|proto=TCP
+//       spt=61160 dpt=25 act=allowed app=SMTP … src=… dst=… UNIFIutcTime=…
+//
+// CEF events that describe traffic — those carrying src and dst, such as the
+// IDS/IPS "Threat Detected" — are read too: act gives the verdict (an IDS in
+// detect-only mode reports "allowed"), the IPS signature names the rule, and
+// the CEF event name takes the chain's place. Events about clients, devices
+// and admins carry no traffic and are left unparsed.
 // Events normalize into the shared shape in logtype/firewall.rs.
 // =============================================================================
 
 use std::sync::OnceLock;
 
 use anyhow::Result;
+use chrono::DateTime;
 use duckdb::Connection;
 use regex::Regex;
 
@@ -106,6 +119,9 @@ fn fields(text: &str) -> Vec<(&str, &str)> {
 // for lines that aren't an allow/deny decision.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn parse_line(line: &str) -> Option<FirewallEvent> {
+    if let Some(start) = line.find("CEF:") {
+        return parse_cef(&line[start..]);
+    }
     let caps = prefix_re().captures(line)?;
     let (chain, rule_id, action) = split_prefix(caps.get(1)?.as_str())?;
     let kv = fields(&line[caps.get(0)?.end()..]);
@@ -140,6 +156,147 @@ pub fn parse_line(line: &str) -> Option<FirewallEvent> {
     })
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// cef_key_re()
+// The start of a CEF extension pair: a key preceded by a space (or the start)
+// and followed by "=". An escaped "\=" inside a value never matches, since a
+// backslash can't be part of a key.
+// ─────────────────────────────────────────────────────────────────────────────
+fn cef_key_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?:^|\s)([A-Za-z_][A-Za-z0-9_.]*)=").expect("valid regex"))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cef_unescape(value)
+// Undoes CEF's escaping: \= \| \\ and \n / \r.
+// ─────────────────────────────────────────────────────────────────────────────
+fn cef_unescape(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut chars = value.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') | Some('r') => out.push(' '),
+            Some(other) => out.push(other),
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cef_split(record)
+// Splits "CEF:0|vendor|product|version|id|name|severity|extension" into its
+// seven header fields and the extension, honouring "\|" inside header fields.
+// ─────────────────────────────────────────────────────────────────────────────
+fn cef_split(record: &str) -> Option<(Vec<String>, &str)> {
+    let mut header = Vec::with_capacity(7);
+    let mut start = 0;
+    let mut escaped = false;
+    for (i, c) in record.char_indices() {
+        match c {
+            '\\' if !escaped => escaped = true,
+            '|' if !escaped => {
+                header.push(cef_unescape(&record[start..i]));
+                start = i + 1;
+                if header.len() == 7 {
+                    return Some((header, &record[start..]));
+                }
+            }
+            _ => escaped = false,
+        }
+    }
+    None
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cef_fields(extension)
+// Reads the extension's key=value pairs. Values may contain spaces
+// ("UNIFIhost=Cloud Gateway Fiber"), so each runs up to the next key.
+// ─────────────────────────────────────────────────────────────────────────────
+fn cef_fields(extension: &str) -> Vec<(String, String)> {
+    let keys: Vec<_> = cef_key_re().captures_iter(extension).collect();
+    keys.iter()
+        .enumerate()
+        .map(|(i, caps)| {
+            let key = caps.get(1).expect("group 1 always matches");
+            let end = keys.get(i + 1).map_or(extension.len(), |next| next.get(0).expect("whole match").start());
+            let value = extension[key.end() + 1..end].trim();
+            (key.as_str().to_string(), cef_unescape(value))
+        })
+        .collect()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cef_action(act)
+// UniFi reports "allowed" for an IDS that only detects, and "blocked" once IPS
+// stops the flow; any refusing verb is a deny.
+// ─────────────────────────────────────────────────────────────────────────────
+fn cef_action(act: &str) -> Action {
+    let act = act.to_ascii_lowercase();
+    if ["block", "drop", "den", "reject"].iter().any(|v| act.contains(v)) {
+        Action::Deny
+    } else {
+        Action::Allow
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// parse_cef(record)
+// Parses a UniFi CEF record that describes traffic into a firewall event; None
+// for malformed records and for events without a source and destination.
+// ─────────────────────────────────────────────────────────────────────────────
+fn parse_cef(record: &str) -> Option<FirewallEvent> {
+    let (header, extension) = cef_split(record)?;
+    let kv = cef_fields(extension);
+    let get = |key: &str| kv.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str()).unwrap_or("");
+    let first = |keys: &[&str]| keys.iter().map(|k| get(k)).find(|v| !v.is_empty()).unwrap_or("").to_string();
+
+    let (src_ip, dst_ip) = (get("src"), get("dst"));
+    if src_ip.is_empty() || dst_ip.is_empty() {
+        return None;
+    }
+    let name = header[5].clone();
+    Some(FirewallEvent {
+        ts: DateTime::parse_from_rfc3339(get("UNIFIutcTime")).ok().map(|t| t.naive_utc()),
+        action: cef_action(get("act")),
+        protocol: get("proto").to_lowercase(),
+        src_ip: src_ip.to_string(),
+        src_port: get("spt").parse().ok(),
+        dst_ip: dst_ip.to_string(),
+        dst_port: get("dpt").parse().ok(),
+        src_zone: first(&["UNIFIsrcZone", "deviceInboundInterface"]),
+        dst_zone: first(&["UNIFIdstZone", "deviceOutboundInterface"]),
+        rule: match first(&["UNIFIipsSignature", "UNIFIpolicyName"]) {
+            rule if rule.is_empty() => name.clone(),
+            rule => rule,
+        },
+        bytes: get("UNIFItotalBytes").parse().ok(),
+        event_type: name,
+        application: get("app").to_string(),
+    })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// full_line(raw, meta)
+// Rebuilds the line the gateway sent. The body keeps the tag the syslog parser
+// strips ("kernel:", or the "CEF:" a CEF record starts with). UniFi sends CEF
+// with no hostname, so the parser takes the record's first word
+// ("CEF:0|Ubiquiti|UniFi") as the hostname and the next as the tag; that word
+// is put back in front of the body.
+// ─────────────────────────────────────────────────────────────────────────────
+fn full_line(raw: &str, meta: &Meta) -> String {
+    let body = if meta.body.is_empty() { raw } else { meta.body.as_str() };
+    match meta.hostname.as_deref() {
+        Some(host) if host.starts_with("CEF:") && !body.contains("CEF:") => format!("{host} {body}"),
+        _ => body.to_string(),
+    }
+}
+
 impl LogType for UniFi {
     fn name(&self) -> &'static str {
         "unifi"
@@ -162,10 +319,8 @@ impl LogType for UniFi {
     }
 
     fn ingest(&self, raw: &str, meta: &Meta, conn: &Connection) -> Result<bool> {
-        // The body keeps the "kernel:" tag the syslog parser strips, so the
-        // stored line is what the gateway sent; the prefix is found either way.
-        let line = if meta.body.is_empty() { raw } else { meta.body.as_str() };
-        let Some(event) = parse_line(line) else {
+        let line = full_line(raw, meta);
+        let Some(event) = parse_line(&line) else {
             return Ok(false);
         };
         firewall::insert(conn, "unifi", &event, meta, line.trim())?;
@@ -251,6 +406,113 @@ mod tests {
         ] {
             assert!(parse_line(line).is_none(), "{line:?}");
         }
+    }
+
+    // CEF from the UniFi Network SIEM setting (made-up addresses).
+    const THREAT: &str = r"CEF:0|Ubiquiti|UniFi Network|10.6.109|200|Threat Detected|7|UNIFIcategory=Security UNIFIhost=Cloud Gateway Fiber proto=TCP spt=61160 dpt=25 act=allowed app=SMTP UNIFIrisk=medium UNIFIpolicyName=DShield Block List UNIFIpolicyType=IDS/IPS UNIFIdirection=incoming deviceOutboundInterface=DMZ UNIFIdeviceIp=192.168.1.1 src=203.0.113.41 dst=192.168.3.13 UNIFIsrcRegion=AE UNIFIdstZone=Dmz UNIFItotalBytes=58 UNIFItotalPackets=1 UNIFIflowStartTime=Nov 7, 2026 at 10:59:03.542 AM UNIFIipsSignature=ET DROP Dshield Block Listed Source group 1 UNIFIipsSignatureId=2402000 UNIFIutcTime=2026-11-07T08:59:04.647Z msg=A network intrusion attempt from 203.0.113.41 to 192.168.3.13 has been detected.";
+
+    #[test]
+    fn parses_a_cef_threat() {
+        let e = parse_line(THREAT).expect("should parse");
+        assert_eq!(e.action, Action::Allow, "detect-only IDS lets it through");
+        assert_eq!(e.src_ip, "203.0.113.41");
+        assert_eq!(e.dst_ip, "192.168.3.13");
+        assert_eq!(e.src_port, Some(61160));
+        assert_eq!(e.dst_port, Some(25));
+        assert_eq!(e.protocol, "tcp");
+        assert_eq!(e.application, "SMTP");
+        assert_eq!(e.rule, "ET DROP Dshield Block Listed Source group 1");
+        assert_eq!(e.event_type, "Threat Detected");
+        assert_eq!(e.dst_zone, "Dmz");
+        assert_eq!(e.bytes, Some(58));
+        assert_eq!(e.ts.map(|t| t.to_string()), Some("2026-11-07 08:59:04.647".to_string()));
+    }
+
+    #[test]
+    fn a_blocking_ips_is_a_deny() {
+        for act in ["blocked", "dropped", "denied", "rejected"] {
+            let line = THREAT.replace("act=allowed", &format!("act={act}"));
+            assert_eq!(parse_line(&line).unwrap().action, Action::Deny, "act={act}");
+        }
+    }
+
+    #[test]
+    fn cef_values_keep_spaces_and_escapes() {
+        let line = THREAT.replace("UNIFIipsSignature=ET DROP Dshield Block Listed Source group 1", r"UNIFIipsSignature=GPL a\=b c\\d");
+        assert_eq!(parse_line(&line).unwrap().rule, r"GPL a=b c\d");
+        // Without a signature, the policy names the rule.
+        let line = THREAT.replace("UNIFIipsSignature=ET DROP Dshield Block Listed Source group 1 ", "");
+        assert_eq!(parse_line(&line).unwrap().rule, "DShield Block List");
+        // An escaped pipe in the header doesn't shift the event name.
+        let line = THREAT.replace("|Threat Detected|", r"|Threat \| Detected|");
+        assert_eq!(parse_line(&line).unwrap().event_type, "Threat | Detected");
+    }
+
+    #[test]
+    fn skips_cef_events_without_traffic() {
+        let wifi = "CEF:0|Ubiquiti|UniFi Network|10.6.109|401|WiFi Client Disconnected|2|UNIFIcategory=Client Devices UNIFIhost=Cloud Gateway Fiber UNIFIclientIp=192.168.1.107 UNIFIduration=4m 51s msg=Watch disconnected.";
+        assert!(parse_line(wifi).is_none());
+        assert!(parse_line("CEF:0|Ubiquiti|truncated").is_none());
+    }
+
+    #[test]
+    fn ingests_a_cef_record_split_by_the_syslog_parser() {
+        use crate::logtype::Registry;
+        use chrono::Utc;
+
+        let conn = Connection::open_in_memory().unwrap();
+        Registry::with_defaults().init_all(&conn).unwrap();
+        // syslog_loose reads "CEF:" as a tag; the body puts it back.
+        let meta = Meta {
+            source_ip: "192.168.1.1".into(),
+            hostname: None,
+            tag: Some("CEF".into()),
+            body: THREAT.to_string(),
+            received_at: Utc::now(),
+        };
+        assert!(UniFi.ingest(THREAT.trim_start_matches("CEF:"), &meta, &conn).unwrap());
+        let (rule, app, raw): (String, String, String) = conn
+            .prepare("SELECT rule, application, raw FROM unifi")
+            .unwrap()
+            .query_row([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap();
+        assert_eq!(rule, "ET DROP Dshield Block Listed Source group 1");
+        assert_eq!(app, "SMTP");
+        assert_eq!(raw, THREAT);
+    }
+
+    #[test]
+    fn rejoins_a_cef_record_sent_without_a_hostname() {
+        use crate::logtype::Registry;
+        use chrono::Utc;
+
+        // How syslog_loose splits "<13>Nov  7 10:59:04 CEF:0|Ubiquiti|UniFi Network|…".
+        let (host, rest) = THREAT.split_once(' ').unwrap();
+        let conn = Connection::open_in_memory().unwrap();
+        Registry::with_defaults().init_all(&conn).unwrap();
+        let meta = Meta {
+            source_ip: "192.168.1.1".into(),
+            hostname: Some(host.into()),
+            tag: Some("Network|10.6.109|200|Threat".into()),
+            body: rest.to_string(),
+            received_at: Utc::now(),
+        };
+        assert_eq!(full_line("Detected|7|…", &meta), THREAT);
+        assert!(UniFi.ingest("Detected|7|…", &meta, &conn).unwrap());
+        let raw: String = conn.prepare("SELECT raw FROM unifi").unwrap().query_row([], |r| r.get(0)).unwrap();
+        assert_eq!(raw, THREAT, "the stored line is the whole record");
+    }
+
+    // A UCG sends its firewall lines with no "kernel:" tag, and its DESCR
+    // carries the chain in brackets (truncated by iptables' prefix limit).
+    #[test]
+    fn parses_an_untagged_ucg_line() {
+        let line = r#"[GUEST_LOCAL-D-2147483647] DESCR="[GUEST_LOCAL]Block All Traff" IN=br99 OUT= MAC=45:00:00:20:67:d3:40:00:40:11:af:50:c0:a8 SRC=192.168.99.1 DST=255.255.255.255 LEN=32 TOS=00 PREC=0x00 TTL=64 ID=26579 DF PROTO=UDP SPT=53350 DPT=10001 LEN=12 MARK=1a0000 "#;
+        let e = parse_line(line).expect("should parse");
+        assert_eq!(e.action, Action::Deny);
+        assert_eq!(e.event_type, "GUEST_LOCAL");
+        assert_eq!(e.rule, "[GUEST_LOCAL]Block All Traff");
+        assert_eq!(e.dst_port, Some(10001));
     }
 
     #[test]

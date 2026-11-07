@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **UniFi IDS/IPS threat detections.** The UniFi Gateway type now also reads
+  the CEF events the UniFi Network application sends to a SIEM server, so
+  "Threat Detected" events land on the same dashboard as firewall-rule hits:
+  source and destination with ports, application, the IPS signature as the
+  rule, the zone, and the gateway's own timestamp. `act=allowed` (IDS in
+  detect-only mode) counts as allowed, a blocking IPS as a deny. CEF events with
+  no traffic in them (clients, devices) are left unparsed. Records sent without
+  a syslog hostname, as UniFi sends them, are rejoined so nothing is lost.
+- **Top applications** on the UniFi dashboard; the rule and chain panels are
+  now "Top rules & signatures" and "Top chains & detections".
+
+### Changed
+- The UniFi tab in **Sending logs** follows the current UniFi Network
+  settings: SIEM server, the Firewall Default Policy and Security Detections
+  contents, and syslog logging per firewall policy.
+
 ## [0.11.0] — 2026-11-07
 
 ### Added

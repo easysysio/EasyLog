@@ -67,8 +67,8 @@ Supported log types:
   logs), **Caddy** (JSON access logs), **HAProxy** (`option httplog`) and
   **Traefik** (JSON access logs).
 * **Firewalls** — **Cisco ASA** (syslog message IDs), **Palo Alto / PAN-OS**
-  (TRAFFIC logs) and **UniFi gateways** (iptables firewall logs), on a dashboard
-  built around the allow/deny split.
+  (TRAFFIC logs) and **UniFi gateways** (firewall-rule hits and IDS/IPS threat
+  detections), on a dashboard built around the allow/deny split.
 * **WAF** — **EasyWAF** (logfmt event log), on a dashboard built around the
   verdict: what was blocked, and — separately — what was **served that an
   enforcing policy would have refused**, with the rules that fired and the same
