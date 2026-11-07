@@ -2,6 +2,10 @@
 # runners — avoids cross-compiling the bundled DuckDB C++), then publish a
 # GitHub Release whose body is the matching CHANGELOG section, with the packages
 # attached.
+#
+# Every action is pinned to a full commit SHA (the version is in the trailing
+# comment) so a moved or hijacked tag can't change what runs here; Dependabot
+# (.github/dependabot.yml) proposes updates to the pins.
 name: Release
 
 on:
@@ -9,8 +13,9 @@ on:
     tags:
       - "v*"
 
+# Read-only by default; only the publish job below may write to the repo.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -25,14 +30,16 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       - name: Install packaging tools
         run: cargo install cargo-deb cargo-generate-rpm --locked
@@ -51,7 +58,9 @@ jobs:
           for month in "$(date -u +%Y-%m)" "$(date -u -d '1 month ago' +%Y-%m)"; do
             url="https://download.db-ip.com/free/dbip-country-lite-${month}.mmdb.gz"
             echo "::group::Trying ${url}"
-            if curl -fsSL --max-time 180 -o /tmp/geo.mmdb.gz "$url" \
+            # --proto/--proto-redir: never fall back to plain HTTP, even on a redirect.
+            if curl -fsSL --proto '=https' --proto-redir '=https' --max-time 180 \
+                 -o /tmp/geo.mmdb.gz "$url" \
                && gunzip -f /tmp/geo.mmdb.gz; then
               size=$(stat -c%s /tmp/geo.mmdb)
               # A truncated download or an HTML error page would still gunzip to
@@ -89,7 +98,7 @@ jobs:
           cp target/generate-rpm/*.rpm dist/
           ls -l dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: packages-${{ matrix.arch }}
           path: dist/*
@@ -99,11 +108,13 @@ jobs:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the GitHub Release and upload the packages
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Download all packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: dist
           merge-multiple: true
@@ -123,7 +134,7 @@ jobs:
           cat RELEASE_NOTES.md
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           name: EasyLog ${{ github.ref_name }}
           body_path: RELEASE_NOTES.md

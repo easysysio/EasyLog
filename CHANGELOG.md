@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Release pipeline hardening: every GitHub Action is pinned to a full commit
+  SHA, the workflow token is read-only except in the job that publishes the
+  release, and the GeoIP database download refuses plain-HTTP redirects.
+  Dependabot now proposes updates to the pinned actions weekly.
+
 ## [0.11.3] — 2026-11-07
 
 ### Added

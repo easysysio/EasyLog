@@ -1,0 +1,15 @@
+# Dependabot: keeps the SHA-pinned GitHub Actions in .github/workflows current.
+# It opens one weekly PR that bumps the pinned SHA and its "# vX.Y.Z" comment
+# together; review it like any other change to the release pipeline.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: ci
