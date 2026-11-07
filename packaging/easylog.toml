@@ -50,3 +50,8 @@ auto_compact = true
 log_dir        = "/var/log/easylog"
 log_level      = "info"      # error | warn | info | debug | trace (RUST_LOG wins)
 log_keep_days  = 14
+
+# Session cookie: HTTPS only. Set automatically behind a reverse proxy that sends
+# X-Forwarded-Proto: https; set true for a TLS proxy that doesn't. Leave false if
+# you browse to EasyLog over plain http:// — the cookie wouldn't come back.
+secure_cookies = false

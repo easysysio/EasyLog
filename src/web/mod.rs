@@ -19,7 +19,7 @@ use axum::{
     Form, Json, Router,
     extract::{ConnectInfo, Path, Request, State},
     http::Uri,
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     middleware::{self, Next},
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
@@ -356,13 +356,35 @@ fn actor(jar: &SignedCookieJar, addr: SocketAddr) -> Actor {
     Actor::new(name, addr.ip().to_string())
 }
 
-// Builds a signed session cookie carrying the logged-in username.
-fn session_cookie(username: String) -> Cookie<'static> {
+// ─────────────────────────────────────────────────────────────────────────────
+// session_cookie(username, secure)
+// Builds the signed session cookie carrying the logged-in username (an empty
+// username builds the one logout removes). `secure` limits it to HTTPS.
+// ─────────────────────────────────────────────────────────────────────────────
+fn session_cookie(username: String, secure: bool) -> Cookie<'static> {
     Cookie::build(("session", username))
         .http_only(true)
+        .secure(secure)
         .same_site(SameSite::Lax)
         .path("/")
         .build()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// is_https(force, headers)
+// Whether the session cookie should be Secure: forced by the `secure_cookies`
+// setting, or because a TLS-terminating reverse proxy reports the browser came
+// in over HTTPS (first X-Forwarded-Proto value). EasyLog itself serves plain
+// HTTP, so without either a Secure cookie would never come back and nobody
+// could sign in. A forged header only affects the forger's own cookie.
+// ─────────────────────────────────────────────────────────────────────────────
+fn is_https(force: bool, headers: &HeaderMap) -> bool {
+    force
+        || headers
+            .get("x-forwarded-proto")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.split(',').next())
+            .is_some_and(|proto| proto.trim().eq_ignore_ascii_case("https"))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -387,6 +409,7 @@ struct LoginForm {
 async fn login_submit(
     State(state): State<Arc<AppState>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     jar: SignedCookieJar,
     Form(form): Form<LoginForm>,
 ) -> Result<Response, AppError> {
@@ -398,7 +421,8 @@ async fn login_submit(
     let who = Actor::new(username.clone(), addr.ip().to_string());
     if ok {
         audit::record("login.success", &who, "signed in");
-        let jar = jar.add(session_cookie(username));
+        let secure = is_https(state.config.secure_cookies, &headers);
+        let jar = jar.add(session_cookie(username, secure));
         Ok((jar, Redirect::to("/")).into_response())
     } else {
         // Failed attempts are the ones worth having a record of.
@@ -432,6 +456,7 @@ struct SetupForm {
 async fn setup_submit(
     State(state): State<Arc<AppState>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     jar: SignedCookieJar,
     Form(form): Form<SetupForm>,
 ) -> Result<Response, AppError> {
@@ -456,7 +481,8 @@ async fn setup_submit(
             let username = form.username.trim().to_string();
             let who = Actor::new(username.clone(), addr.ip().to_string());
             audit::record("admin.create", &who, "first-run administrator created");
-            let jar = jar.add(session_cookie(username));
+            let secure = is_https(state.config.secure_cookies, &headers);
+            let jar = jar.add(session_cookie(username, secure));
             Ok((jar, Redirect::to("/")).into_response())
         }
         Err(e) => render_err(&e.to_string()),
@@ -467,12 +493,15 @@ async fn setup_submit(
 // POST /logout — clear the session cookie.
 // ─────────────────────────────────────────────────────────────────────────────
 async fn logout(
+    State(state): State<Arc<AppState>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     jar: SignedCookieJar,
 ) -> (SignedCookieJar, Redirect) {
     audit::record("logout", &actor(&jar, addr), "signed out");
-    let removal = Cookie::build(("session", "")).path("/").build();
-    (jar.remove(removal), Redirect::to("/login"))
+    // Same attributes as the cookie being cleared, so the browser matches it.
+    let secure = is_https(state.config.secure_cookies, &headers);
+    (jar.remove(session_cookie(String::new(), secure)), Redirect::to("/login"))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -844,6 +873,30 @@ impl IntoResponse for AppError {
 mod tests {
     use super::*;
     use crate::logtype::Registry;
+
+    // The session cookie is Secure only when the browser is on HTTPS: forced by
+    // config, or reported by a reverse proxy. On plain HTTP it must stay off or
+    // the browser would never send it back and sign-in would loop.
+    #[test]
+    fn marks_the_session_cookie_secure_only_over_https() {
+        let proxied = |proto: &str| {
+            let mut h = HeaderMap::new();
+            h.insert("x-forwarded-proto", proto.parse().unwrap());
+            h
+        };
+        assert!(!is_https(false, &HeaderMap::new()));
+        assert!(is_https(true, &HeaderMap::new()));
+        assert!(is_https(false, &proxied("https")));
+        assert!(is_https(false, &proxied("HTTPS")));
+        assert!(is_https(false, &proxied("https, http")));
+        assert!(!is_https(false, &proxied("http")));
+        assert!(!is_https(false, &proxied("http, https")));
+
+        let cookie = session_cookie("admin".into(), true);
+        assert_eq!(cookie.secure(), Some(true));
+        assert_eq!(cookie.http_only(), Some(true));
+        assert_eq!(session_cookie("admin".into(), false).secure(), Some(false));
+    }
 
     // The overview reads every registered table through one union, so a type
     // whose table lacks a column the union selects takes the whole home page

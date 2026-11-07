@@ -200,6 +200,8 @@ auto_compact   = true     # rewrite the database at startup to reclaim disk
 log_dir        = "/var/log/easylog"   # EasyLog's own logs; "" = stdout only
 log_level      = "info"               # RUST_LOG overrides this
 log_keep_days  = 14                   # daily rotation, files kept
+
+secure_cookies = false    # HTTPS-only session cookie (see "Serving EasyLog over HTTPS")
 ```
 
 ### EasyLog's own logs
@@ -219,6 +221,15 @@ refusing to start.
 
 Log sources are **not** configured here — they're managed in the database via the
 web UI (see below).
+
+### HTTPS
+
+EasyLog serves plain HTTP. Behind a TLS-terminating reverse proxy that sends
+`X-Forwarded-Proto: https` (nginx: `proxy_set_header X-Forwarded-Proto $scheme;`;
+Caddy and Traefik do it by default), the session cookie is marked `Secure`
+automatically. For a proxy that doesn't send the header, set
+`secure_cookies = true` — but leave it off when browsing to EasyLog over plain
+HTTP, or the browser won't send the cookie back and sign-in fails.
 
 ### Retention
 

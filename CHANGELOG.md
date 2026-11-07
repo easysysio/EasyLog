@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SHA, the workflow token is read-only except in the job that publishes the
   release, and the GeoIP database download refuses plain-HTTP redirects.
   Dependabot now proposes updates to the pinned actions weekly.
+- The session cookie is marked `Secure` when EasyLog sits behind an HTTPS
+  reverse proxy that sends `X-Forwarded-Proto: https`, so the browser never
+  sends it over plain HTTP. A new `secure_cookies` setting forces the flag for
+  proxies that don't send the header. Direct `http://` access is unchanged.
 
 ## [0.11.3] — 2026-11-07
 

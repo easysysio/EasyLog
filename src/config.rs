@@ -58,6 +58,12 @@ pub struct Config {
     /// How many daily log files to keep before the oldest is removed.
     #[serde(default = "default_log_keep_days")]
     pub log_keep_days: u16,
+    /// Always mark the session cookie `Secure`, so browsers only send it over
+    /// HTTPS. Off by default because EasyLog itself serves plain HTTP; behind an
+    /// HTTPS reverse proxy that sends `X-Forwarded-Proto: https` the flag is set
+    /// automatically, so this is only needed for proxies that don't.
+    #[serde(default)]
+    pub secure_cookies: bool,
 }
 
 fn default_bind() -> String {
@@ -106,6 +112,7 @@ impl Default for Config {
             log_dir: default_log_dir(),
             log_level: default_log_level(),
             log_keep_days: default_log_keep_days(),
+            secure_cookies: false,
         }
     }
 }

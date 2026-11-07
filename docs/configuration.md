@@ -15,6 +15,8 @@ auto_compact   = true     # rewrite the database at startup to reclaim disk
 log_dir        = "/var/log/easylog"   # EasyLog's own logs; "" = stdout only
 log_level      = "info"               # RUST_LOG overrides this
 log_keep_days  = 14                   # daily rotation, files kept
+
+secure_cookies = false    # HTTPS-only session cookie (see "Serving EasyLog over HTTPS")
 ```
 
 ## EasyLog's own logs
@@ -45,6 +47,34 @@ an interrupted compaction leaves your data untouched.
     The **Storage** card on the overview shows the database size on disk and the
     active retention window. To reclaim disk right after shortening the window,
     restart the service — that's when compaction runs.
+
+## Serving EasyLog over HTTPS
+
+EasyLog serves plain HTTP on `web_port`. To reach it over HTTPS, put it behind a
+reverse proxy that terminates TLS — and have the proxy say so with the
+`X-Forwarded-Proto` header. EasyLog then marks the session cookie **Secure**, so
+the browser never sends it over an unencrypted connection. With nginx:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name easylog.example.com;
+    # ssl_certificate / ssl_certificate_key ...
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Caddy and Traefik send `X-Forwarded-Proto` on their own. If your proxy can't, set
+**`secure_cookies = true`** to mark the cookie Secure regardless.
+
+!!! warning
+    Leave `secure_cookies` off if you browse to `http://<host>:3000` directly: a
+    Secure cookie is never sent back over plain HTTP, so you couldn't sign in.
 
 !!! note
     Log **sources** are not configured here — they're managed in the web UI (next section), so you never have to edit and reload a file to add a host.
