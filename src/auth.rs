@@ -92,12 +92,11 @@ pub fn load_or_create_cookie_key(conn: &Connection) -> Result<Key> {
         rows.next().transpose()?
     };
 
-    if let Some(hex) = existing {
-        if let Some(bytes) = from_hex(&hex) {
-            if bytes.len() >= 64 {
-                return Ok(Key::from(&bytes));
-            }
-        }
+    if let Some(hex) = existing
+        && let Some(bytes) = from_hex(&hex)
+        && bytes.len() >= 64
+    {
+        return Ok(Key::from(&bytes));
     }
 
     let key = Key::generate();
@@ -120,7 +119,7 @@ fn to_hex(bytes: &[u8]) -> String {
 
 // Decode a hex string back to bytes; None if malformed.
 fn from_hex(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         return None;
     }
     (0..s.len())

@@ -189,10 +189,8 @@ fn configure_recv_buffer(sock: &Socket) {
         }
     };
 
-    if !forced {
-        if let Err(e) = sock.set_recv_buffer_size(UDP_RECV_BUFFER_BYTES) {
-            tracing::warn!("could not set UDP recv buffer to {UDP_RECV_BUFFER_BYTES} bytes: {e}");
-        }
+    if !forced && let Err(e) = sock.set_recv_buffer_size(UDP_RECV_BUFFER_BYTES) {
+        tracing::warn!("could not set UDP recv buffer to {UDP_RECV_BUFFER_BYTES} bytes: {e}");
     }
 
     // Report what the kernel granted (Linux reports the doubled bookkeeping
