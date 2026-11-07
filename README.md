@@ -290,6 +290,7 @@ registry, so adding a type adds its entry automatically.
 | `GET /firewall/cisco_asa` | Cisco ASA dashboard |
 | `GET /firewall/panos` | Palo Alto dashboard |
 | `GET /firewall/unifi` | UniFi Gateway dashboard |
+| `GET /firewall/unifi/threats` | UniFi threats (IDS/IPS) dashboard |
 | `GET /waf/easywaf` | EasyWAF dashboard |
 | `GET /system/linux` | Linux dashboard |
 | `GET /sources` | Manage log sources |

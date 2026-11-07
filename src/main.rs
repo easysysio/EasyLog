@@ -90,6 +90,7 @@ fn load_templates() -> Result<Tera> {
         ("apache.html", include_str!("../templates/apache.html")),
         ("proxy.html", include_str!("../templates/proxy.html")),
         ("firewall.html", include_str!("../templates/firewall.html")),
+        ("unifi_threats.html", include_str!("../templates/unifi_threats.html")),
         ("easywaf.html", include_str!("../templates/easywaf.html")),
         ("linux.html", include_str!("../templates/linux.html")),
         ("general.html", include_str!("../templates/general.html")),

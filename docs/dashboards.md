@@ -53,6 +53,19 @@ EasyWAF's dashboard asks a different question from the firewall ones. A firewall
 
 So the dashboard leads with a **Served anyway** card counting `would_block` + `would_challenge` — on a DetectionOnly policy that is the number that justifies enforcing — and stacks all six verdicts on the timeline, worst at the foot of each bar. Below it, **By appliance and site** repeats the split for every EasyWAF sending in, which is the view a single appliance cannot produce and the main reason to ship the logs at all. **Top rules fired** unnests the rule list, so a rule dominating `scored` against ordinary traffic stands out as a tuning candidate, while one dominating `blocked` is doing its job. Everything filters, and filters stack: rule 942100 + verdict `scored` + last hour is three clicks.
 
+## The UniFi threats dashboard
+
+A UniFi gateway's intrusion detection reports every hit as a "Threat Detected" event. The firewall dashboard already counts those as allowed or denied traffic; the **Threats** tab beside it (`/firewall/unifi/threats`) asks the questions a detection raises instead:
+
+* **How bad.** UniFi rates each detection low, medium or high risk, and the timeline stacks them that way — a burst of high-risk detections shows as a red band.
+* **Did it get through.** *Blocked* means intrusion prevention stopped it; *detected only* means intrusion detection saw it and let it pass. If most of your threats are "detected only", UniFi is in detection mode.
+* **Which way.** Most threats are *incoming* — something outside probing in. An **outgoing** threat is a device inside your network contacting something malicious, the likeliest sign of an infected device, so it has a KPI card of its own that turns red when there are any.
+* **Who and what.** The signatures that fired (with their ID and the policy behind them), the *remote* addresses — the outside party, whichever way the traffic went — the *local hosts* inside involved, the ports and applications, and a map of where the remote parties are.
+
+The newest 20 detections are listed with all of that on one line. Like every dashboard, any value is a click-to-filter link, the timeline zooms on click, and Raw shows the CEF records behind the page.
+
+Detections stored before this page existed are not lost: on the first start after upgrading, EasyLog fills it from the records it already kept.
+
 ## The Linux dashboard
 
 A server's log is mostly routine — cron, the kernel, systemd — with the security story scattered through it. The Linux dashboard keeps every line but leads with that story:

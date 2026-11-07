@@ -30,6 +30,7 @@ const SPEC: Spec = Spec {
         ExtraDim { key: "application", title: "Top applications", icon: "bi-app-indicator", chip: "Application" },
         ExtraDim { key: "rule", title: "Top security rules", icon: "bi-list-check", chip: "Rule" },
     ],
+    tabs: &[],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

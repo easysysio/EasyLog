@@ -1,0 +1,291 @@
+{# unifi_threats.html — UniFi threats dashboard: IDS/IPS detections by risk,
+   outcome (blocked or only detected) and direction, the signatures that fired,
+   the outside addresses and inside hosts involved, ports, applications, the
+   world map of where threats come from, and the newest detections. Tabs link
+   it with the UniFi firewall page. Context comes from web/unifi_threats.rs. #}
+{% extends "base.html" %}
+{% block title %}UniFi threats — EasyLog{% endblock %}
+{% block head %}
+<style>
+  /* Risk, outcome and direction colours, shared by the stacked timeline, the
+     splits and the panels, so a colour means the same thing everywhere. */
+  .r-high     { background:#e2555a; }
+  .r-medium   { background:#f0883e; }
+  .r-low      { background:#d8a02a; }
+  .r-other    { background:#8b949e; }
+  .o-blocked  { background:#3fb950; }
+  .o-detected { background:#f0883e; }
+  .d-incoming { background:#4c8eda; }
+  .d-outgoing { background:#db61a2; }
+  /* A stacked bar: segments fill it bottom-up, high risk at the foot. The bar
+     has no colour of its own and the top segment absorbs rounding. */
+  .tl-bars .bar.stack { display:flex; flex-direction:column-reverse; overflow:hidden;
+                        background:transparent; }
+  .tl-bars .seg { width:100%; }
+  .tl-bars .seg:last-child { flex:1 0 auto; }
+  .legend { display:flex; flex-wrap:wrap; gap:.75rem; font-size:.78rem; }
+  .legend .sw { display:inline-block; width:.7rem; height:.7rem; border-radius:2px;
+                margin-right:.3rem; vertical-align:-1px; }
+  .threats td { white-space:nowrap; }
+  .threats td.wrap { white-space:normal; min-width:14rem; }
+  .risk-badge { color:#fff; font-weight:600; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0"><i class="bi bi-router me-2"></i>{{ type_label }}</h1>
+  <span class="badge text-bg-secondary">UniFi IDS/IPS</span>
+</div>
+<ul class="nav nav-tabs mb-3">
+  {% for t in tabs %}
+  <li class="nav-item"><a class="nav-link {% if t.active %}active{% endif %}" href="{{ t.href }}"><i class="bi {{ t.icon }} me-1"></i>{{ t.label }}</a></li>
+  {% endfor %}
+</ul>
+
+{% if not has_data %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-shield-check fs-2 d-block mb-2"></i>
+      No threat detections yet. In UniFi, turn on intrusion detection or prevention, and
+      add <strong>Security Detections</strong> to the contents of the SIEM-server syslog
+      that points at EasyLog.
+    </div>
+  </div>
+{% else %}
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-clock-history me-1"></i>Range</span>
+  <div class="btn-group btn-group-sm" role="group" aria-label="Time range">
+    {% for r in range_options %}
+    <a href="{{ r.href }}" class="btn btn-outline-primary {% if r.active %}active{% endif %}">{{ r.label }}</a>
+    {% endfor %}
+  </div>
+  {# Search narrows everything on the page and keeps the active filters. #}
+  <form class="d-flex ms-auto" method="get" action="{{ base }}" role="search">
+    {% for f in search_fields %}<input type="hidden" name="{{ f.name }}" value="{{ f.value }}">{% endfor %}
+    <div class="input-group input-group-sm" style="width:22rem;max-width:100%">
+      <span class="input-group-text"><i class="bi bi-search"></i></span>
+      <input class="form-control" type="search" name="q" value="{{ search }}"
+             placeholder="{{ search_placeholder }}" aria-label="Search">
+      {% if search %}<a class="btn btn-outline-secondary" href="{{ base }}" title="Clear search"><i class="bi bi-x-lg"></i></a>{% endif %}
+      <button class="btn btn-outline-primary" type="submit">Search</button>
+    </div>
+  </form>
+  <a href="{{ raw_href }}" class="btn btn-sm btn-outline-secondary"
+     title="Show the raw CEF records for these filters">
+    <i class="bi bi-card-text me-1"></i>Raw</a>
+</div>
+
+{% if has_filters or window %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <span class="text-secondary small me-1"><i class="bi bi-funnel me-1"></i>Filters</span>
+  {% if window %}
+  <a href="{{ window.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
+    <span class="chip-window" data-from="{{ window.from }}" data-to="{{ window.to }}">Time: {{ window.label }} UTC</span>
+    <i class="bi bi-x-lg ms-1"></i>
+  </a>
+  {% endif %}
+  {% for c in chips %}
+  <a href="{{ c.remove }}" class="badge text-bg-primary text-decoration-none" title="Remove this filter">
+    {{ c.label }} <i class="bi bi-x-lg ms-1"></i>
+  </a>
+  {% endfor %}
+  <a href="{{ base }}" class="small text-decoration-none ms-1">Clear all</a>
+</div>
+{% endif %}
+
+{% if kpis.threats == 0 %}
+  <div class="card">
+    <div class="card-body text-secondary text-center py-5">
+      <i class="bi bi-search fs-2 d-block mb-2"></i>
+      No threats in the selected time range or filter.
+    </div>
+  </div>
+{% else %}
+
+<div class="row row-cols-2 row-cols-md-3 row-cols-xl-6 g-3 mb-4">
+  <div class="col">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-shield-exclamation me-1"></i>Threats</h6>
+      <div class="stat-value">{{ kpis.threats }}</div>
+      <div class="small">
+        <a href="{{ kpis.blocked_href }}" class="text-success text-decoration-none">{{ kpis.blocked }} blocked</a>
+        <span class="text-secondary">·</span>
+        <a href="{{ kpis.detected_href }}" class="{% if kpis.detected > 0 %}text-warning{% else %}text-secondary{% endif %} text-decoration-none">{{ kpis.detected }} detected only</a>
+      </div>
+    </div></div>
+  </div>
+  <div class="col">
+    <a href="{{ kpis.high_href }}" class="card h-100 text-decoration-none text-reset {% if kpis.high > 0 %}border-danger{% endif %}"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-exclamation-triangle me-1"></i>High risk</h6>
+      <div class="stat-value {% if kpis.high > 0 %}text-danger{% endif %}">{{ kpis.high }}</div>
+    </div></a>
+  </div>
+  <div class="col">
+    <a href="{{ kpis.incoming_href }}" class="card h-100 text-decoration-none text-reset"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-crosshair me-1"></i>Remote addresses</h6>
+      <div class="stat-value">{{ kpis.remotes }}</div>
+      <div class="text-secondary small">outside parties</div>
+    </div></a>
+  </div>
+  <div class="col">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-fingerprint me-1"></i>Signatures</h6>
+      <div class="stat-value">{{ kpis.signatures }}</div>
+    </div></div>
+  </div>
+  <div class="col">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-pc-display me-1"></i>Local hosts</h6>
+      <div class="stat-value">{{ kpis.locals }}</div>
+      <div class="text-secondary small">inside, involved</div>
+    </div></div>
+  </div>
+  <div class="col">
+    {# An outgoing detection is a device inside reaching something malicious:
+       the likeliest sign of an infected device, so it is called out. #}
+    <a href="{{ kpis.outgoing_href }}" class="card h-100 text-decoration-none text-reset {% if kpis.outgoing > 0 %}border-danger{% endif %}"><div class="card-body">
+      <h6 class="section-title mb-2"><i class="bi bi-box-arrow-up-right me-1"></i>Outgoing</h6>
+      <div class="stat-value {% if kpis.outgoing > 0 %}text-danger{% endif %}">{{ kpis.outgoing }}</div>
+      <div class="text-secondary small">{% if kpis.outgoing > 0 %}check these devices{% else %}none — good{% endif %}</div>
+    </div></a>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3">Threats over time <span class="text-secondary">({{ range_label }})</span></h6>
+    <div class="tl-chart" data-tl-gran="{{ tl_gran }}">
+      <div class="tl-yaxis">
+        <span>{{ timeline_max }}</span>
+        {% if timeline_max > 1 %}<span>{{ timeline_mid }}</span>{% endif %}
+        <span>0</span>
+      </div>
+      <div class="tl-plot">
+        <div class="tl-bars">
+          {% for b in timeline %}
+          <a class="col" href="{{ b.href }}" data-bs-toggle="tooltip" data-ts="{{ b.ts_epoch }}"
+             data-count="{{ b.count }}"
+             title="{{ b.label }} — {{ b.count }} threats (click to filter to this period)">
+            <div class="bar stack" style="height:{{ b.pct }}%">
+              {% for s in b.segments %}
+              <div class="seg {{ s.css }}" style="height:{{ s.share }}%"></div>
+              {% endfor %}
+            </div>
+          </a>
+          {% endfor %}
+        </div>
+        <div class="tl-xaxis">
+          {% for b in timeline %}<div class="xl" data-ts="{{ b.ts_epoch }}">{{ b.label }}</div>{% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="legend text-secondary mt-3">
+      {% for k in legend %}
+      <span><i class="sw {{ k.css }}"></i>{{ k.label }}</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  {% for panel in splits %}
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi {{ panel.icon }} me-1"></i>{{ panel.title }} <span class="text-secondary">(click to filter)</span></h6>
+        {% for e in panel.bars %}
+        <a href="{{ e.href }}" class="d-flex align-items-center mb-2 text-decoration-none text-reset" title="Filter to {{ e.label }}">
+          <div class="fw-semibold" style="width:120px">{{ e.label }}</div>
+          <div class="progress flex-grow-1" role="progressbar" style="height:18px">
+            <div class="progress-bar {{ e.css }}" style="width:{{ e.pct }}%"></div>
+          </div>
+          <div class="text-secondary text-end font-monospace" style="width:64px">{{ e.count }}</div>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="section-title mb-3"><i class="bi bi-list-ul me-1"></i>Recent threats</h6>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0 threats">
+        <thead>
+          <tr class="text-secondary small"><th>Time</th><th>Way</th><th>Remote</th><th>Local host</th><th>Port</th><th>App</th><th>Signature</th><th>Risk</th><th>Outcome</th></tr>
+        </thead>
+        <tbody>
+          {% for r in recent %}
+          <tr>
+            <td class="small"><span class="raw-ts" data-ts-utc="{{ r.ts }}">{{ r.ts }}</span></td>
+            <td class="small">{% if r.direction == "outgoing" %}<span class="badge d-outgoing">outgoing</span>{% elif r.direction == "incoming" %}<span class="text-secondary">incoming</span>{% endif %}</td>
+            <td class="small">
+              <a href="{{ r.remote_href }}" class="text-decoration-none font-monospace">{{ r.remote }}</a>
+              {% if r.country %}<div class="text-secondary" style="font-size:.72rem">{{ r.country }}</div>{% endif %}
+            </td>
+            <td class="small font-monospace"><a href="{{ r.local_href }}" class="text-decoration-none">{{ r.local }}</a></td>
+            <td class="small font-monospace">{{ r.port }}</td>
+            <td class="small text-secondary">{{ r.app }}</td>
+            <td class="small wrap">{% if r.signature_href %}<a href="{{ r.signature_href }}" class="text-decoration-none">{{ r.signature }}</a>{% else %}{{ r.signature }}{% endif %}</td>
+            <td class="small"><span class="badge risk-badge {{ r.risk_css }}">{{ r.risk }}</span></td>
+            <td class="small">{% if r.blocked %}<span class="badge text-bg-success">blocked</span>{% else %}<span class="badge text-bg-warning">detected only</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% include "_worldmap.html" %}
+
+{# Six ranked panels in two rows: who and what, then where. #}
+<div class="row g-4 mb-4">
+  {% for panel in panels %}
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="section-title mb-3"><i class="bi {{ panel.icon }} me-1"></i>{{ panel.title }} <span class="text-secondary">(click to filter)</span></h6>
+        {% if panel.bars | length == 0 %}
+          <div class="text-secondary small py-2">None in this range.</div>
+        {% else %}
+        <table class="table table-sm table-hover align-middle mb-0">
+          <tbody>
+            {% for r in panel.bars %}
+            <tr>
+              <td class="small {% if not panel.wrap %}text-nowrap{% endif %}" style="max-width:16rem">
+                <a href="{{ r.href }}" class="text-decoration-none {% if panel.mono %}font-monospace{% endif %}" title="Filter to {{ r.label }}">{{ r.label }}</a>
+                {% if r.note %}<div class="text-secondary" style="font-size:.72rem">{{ r.note }}</div>{% endif %}
+              </td>
+              <td class="w-100">
+                <div class="progress" style="height:14px">
+                  <div class="progress-bar {% if r.css %}{{ r.css }}{% else %}bg-primary{% endif %}" style="width:{{ r.pct }}%"></div>
+                </div>
+              </td>
+              <td class="text-end text-secondary font-monospace" style="width:56px">{{ r.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<p class="text-secondary small mt-4 mb-0">
+  <em>Detected only</em> means UniFi's intrusion detection saw the traffic and let it
+  through; switch UniFi to intrusion <em>prevention</em> to block it. <em>Remote</em> is
+  the outside party and <em>local host</em> the device inside, whichever way the traffic
+  went — an <em>outgoing</em> threat is a device inside contacting something malicious.
+  Times are the gateway's own when its clock agrees with EasyLog's.
+  IP geolocation by <a href="https://db-ip.com" class="text-secondary" rel="noopener">DB-IP</a> (CC BY 4.0).
+</p>
+
+{% endif %}{# threats == 0 #}
+{% endif %}{# not has_data #}
+{% endblock %}

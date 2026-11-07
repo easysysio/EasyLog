@@ -48,6 +48,28 @@ pub(crate) struct Spec {
     /// Sentence completing the empty state, telling the user what to forward.
     pub hint: &'static str,
     pub extra: &'static [ExtraDim],
+    /// Sibling pages shown as tabs above the dashboard, as (label, icon, href);
+    /// empty for vendors with a single page.
+    pub tabs: &'static [(&'static str, &'static str, &'static str)],
+}
+
+/// One tab above a dashboard that has sibling pages (UniFi: Firewall | Threats).
+#[derive(Serialize)]
+pub(crate) struct Tab {
+    label: &'static str,
+    icon: &'static str,
+    href: &'static str,
+    active: bool,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tabs(defs, current)
+// The tab strip for a page at `current`, marking that page's tab active.
+// ─────────────────────────────────────────────────────────────────────────────
+pub(crate) fn tabs(defs: &[(&'static str, &'static str, &'static str)], current: &str) -> Vec<Tab> {
+    defs.iter()
+        .map(|&(label, icon, href)| Tab { label, icon, href, active: href == current })
+        .collect()
 }
 
 // Columns the search box looks in. Ports are cast so that typing "443" finds
@@ -608,6 +630,7 @@ pub(crate) fn render(
     ctx.insert("type_label", spec.label);
     ctx.insert("type_icon", spec.icon);
     ctx.insert("badge", spec.badge);
+    ctx.insert("tabs", &tabs(spec.tabs, base));
     ctx.insert("hint", spec.hint);
     ctx.insert("base", base);
     ctx.insert("kpis", &kpis);

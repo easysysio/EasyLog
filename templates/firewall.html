@@ -3,7 +3,8 @@
    top sources / destinations / ports / countries, the world map of where traffic
    came from, plus any dimension the vendor alone logs (see web/firewall.rs).
    Type-specific values arrive in the context: type_label, type_icon, badge,
-   hint, base, extra_panels. #}
+   hint, base, extra_panels, and tabs when the vendor has sibling pages
+   (UniFi: Firewall | Threats). #}
 {% extends "base.html" %}
 {% block title %}{{ type_label }} — EasyLog{% endblock %}
 {% block content %}
@@ -11,6 +12,13 @@
   <h1 class="h3 mb-0"><i class="bi {{ type_icon }} me-2"></i>{{ type_label }}</h1>
   <span class="badge text-bg-secondary">{{ badge }}</span>
 </div>
+{% if tabs %}
+<ul class="nav nav-tabs mb-3">
+  {% for t in tabs %}
+  <li class="nav-item"><a class="nav-link {% if t.active %}active{% endif %}" href="{{ t.href }}"><i class="bi {{ t.icon }} me-1"></i>{{ t.label }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
 
 {% if not has_data %}
   <div class="card">

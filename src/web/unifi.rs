@@ -7,6 +7,8 @@
 // the application (from CEF events), and the chain the rule sits in (WAN_IN for
 // traffic passing through the gateway, WAN_LOCAL for traffic aimed at the
 // gateway itself, …) or, for a CEF event, its name ("Threat Detected").
+// Threat detections also have a page of their own (web/unifi_threats.rs); the
+// two are linked by tabs.
 // =============================================================================
 
 use std::sync::Arc;
@@ -33,7 +35,14 @@ const SPEC: Spec = Spec {
         ExtraDim { key: "event_type", title: "Top chains & detections", icon: "bi-diagram-3", chip: "Chain" },
         ExtraDim { key: "application", title: "Top applications", icon: "bi-app-indicator", chip: "Application" },
     ],
+    tabs: TABS,
 };
+
+/// The UniFi pages, as tabs: the firewall view and the threats view.
+pub(crate) const TABS: &[(&str, &str, &str)] = &[
+    ("Firewall", "bi-bricks", "/firewall/unifi"),
+    ("Threats", "bi-shield-exclamation", "/firewall/unifi/threats"),
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /firewall/unifi  (?range= plus ?src= ?dst= ?port= ?action= ?protocol=

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A UniFi threats dashboard** (`/firewall/unifi/threats`), a **Threats** tab
+  beside the UniFi firewall view. IDS/IPS detections by risk (stacked on the
+  timeline), blocked vs detected only, and incoming vs **outgoing** — a device
+  inside contacting something malicious, called out in its own KPI. Panels for
+  signatures (with ID and policy), remote addresses, local hosts, ports,
+  applications and countries, a map of where threats come from, and the newest
+  detections in full. Every value filters; range, zoom, search and Raw work as
+  everywhere else.
+- **UniFi detections are stored in full** in a new `unifi_threats` table —
+  risk, CEF severity, signature ID, policy and policy type, direction, packets
+  and message, which the firewall shape had no room for. They still appear on
+  the firewall dashboard too. On the first start after upgrading, the table is
+  filled from the detections already stored, so the page starts with history.
+
+### Changed
+- **Retention covers every table a log type keeps**, not just the one named
+  after it, so the threats table ages out with everything else.
+
 ## [0.11.2] — 2026-11-07
 
 ### Added
