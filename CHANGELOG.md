@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.3] — 2026-11-07
+
 ### Added
 - **A UniFi threats dashboard** (`/firewall/unifi/threats`), a **Threats** tab
   beside the UniFi firewall view. IDS/IPS detections by risk (stacked on the
