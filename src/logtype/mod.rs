@@ -160,6 +160,12 @@ pub trait LogType: Send + Sync {
     /// Create this type's table(s) if they do not already exist.
     fn init_schema(&self, conn: &Connection) -> Result<()>;
 
+    /// Every table this type stores events in, so retention prunes them all.
+    /// Most types keep one, named after the type.
+    fn tables(&self) -> Vec<&'static str> {
+        vec![self.name()]
+    }
+
     /// Parse `raw` and insert the resulting row(s). Returns Ok(false) when the
     /// line could not be parsed (counted as a drop, not a hard error).
     fn ingest(&self, raw: &str, meta: &Meta, conn: &Connection) -> Result<bool>;
@@ -219,6 +225,16 @@ impl Registry {
         let mut names: Vec<&'static str> = self.types.keys().copied().collect();
         names.sort_unstable();
         names
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Registry::tables()
+    // Every event table across all types, sorted — what retention prunes.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn tables(&self) -> Vec<&'static str> {
+        let mut tables: Vec<&'static str> = self.types.values().flat_map(|t| t.tables()).collect();
+        tables.sort_unstable();
+        tables
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -112,7 +112,7 @@ pub fn init_schema(conn: &Connection, table: &str) -> Result<()> {
 // MAX_CLOCK_SKEW of the arrival time (it is the more precise of the two),
 // otherwise the arrival time.
 // ─────────────────────────────────────────────────────────────────────────────
-fn event_time(device: Option<NaiveDateTime>, received: NaiveDateTime) -> NaiveDateTime {
+pub(crate) fn event_time(device: Option<NaiveDateTime>, received: NaiveDateTime) -> NaiveDateTime {
     match device {
         Some(ts) if (ts - received).abs() <= MAX_CLOCK_SKEW => ts,
         _ => received,

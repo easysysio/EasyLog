@@ -56,7 +56,7 @@ pub fn prune(conn: &Connection, registry: &Registry, retention_days: u32) -> Res
     }
     let cutoff = cutoff(retention_days);
     let mut removed = 0u64;
-    for table in registry.names() {
+    for table in registry.tables() {
         let n = prune_table(conn, table, &cutoff).with_context(|| format!("pruning {table}"))?;
         if n > 0 {
             tracing::info!("retention: removed {n} row(s) from {table}");

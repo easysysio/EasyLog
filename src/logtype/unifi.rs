@@ -32,17 +32,20 @@
 //       spt=61160 dpt=25 act=allowed app=SMTP … src=… dst=… UNIFIutcTime=…
 //
 // CEF events that describe traffic — those carrying src and dst, such as the
-// IDS/IPS "Threat Detected" — are read too: act gives the verdict (an IDS in
-// detect-only mode reports "allowed"), the IPS signature names the rule, and
-// the CEF event name takes the chain's place. Events about clients, devices
-// and admins carry no traffic and are left unparsed.
+// IDS/IPS "Threat Detected" — are read too, and stored twice: once in the
+// firewall shape (act gives the verdict — an IDS in detect-only mode reports
+// "allowed" — the IPS signature names the rule, and the CEF event name takes
+// the chain's place), and once in full in `unifi_threats`, which keeps what a
+// threats dashboard needs and the firewall shape has no room for: risk,
+// severity, signature ID, policy, direction and message. Events about clients,
+// devices and admins carry no traffic and are left unparsed.
 // Events normalize into the shared shape in logtype/firewall.rs.
 // =============================================================================
 
 use std::sync::OnceLock;
 
 use anyhow::Result;
-use chrono::DateTime;
+use chrono::{DateTime, NaiveDateTime};
 use duckdb::Connection;
 use regex::Regex;
 
@@ -150,7 +153,7 @@ fn is_discovery_broadcast(protocol: &str, dst: &str, dst_port: Option<i32>) -> b
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn parse_line(line: &str) -> Option<FirewallEvent> {
     if let Some(start) = line.find("CEF:") {
-        return parse_cef(&line[start..]);
+        return parse_threat(&line[start..]).map(|t| t.firewall_event());
     }
     let caps = prefix_re().captures(line)?;
     let (chain, rule_id, action) = split_prefix(caps.get(1)?.as_str())?;
@@ -275,12 +278,92 @@ fn cef_action(act: &str) -> Action {
     }
 }
 
+/// Table holding UniFi's security detections in full.
+pub const THREATS_TABLE: &str = "unifi_threats";
+
+/// One security detection (IDS/IPS "Threat Detected" and any other CEF event
+/// that carries traffic), with everything the CEF record says about it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Threat {
+    /// The gateway's own time (UNIFIutcTime); None falls back to arrival time.
+    pub ts: Option<NaiveDateTime>,
+    /// CEF event name, e.g. "Threat Detected".
+    pub event: String,
+    /// CEF severity, 0–10.
+    pub severity: Option<i32>,
+    /// UniFi's rating, lowercased: low, medium, high (or empty).
+    pub risk: String,
+    pub action: Action,
+    pub signature: String,
+    pub signature_id: String,
+    /// The policy that matched, e.g. "DShield Block List", and its kind, "IDS/IPS".
+    pub policy: String,
+    pub policy_type: String,
+    /// "incoming" or "outgoing", as UniFi reports it (or empty).
+    pub direction: String,
+    pub src_ip: String,
+    pub src_port: Option<i32>,
+    pub dst_ip: String,
+    pub dst_port: Option<i32>,
+    pub protocol: String,
+    pub application: String,
+    pub src_zone: String,
+    pub dst_zone: String,
+    pub bytes: Option<i64>,
+    pub packets: Option<i64>,
+    pub message: String,
+}
+
+impl Threat {
+    // ─────────────────────────────────────────────────────────────────────────
+    // Threat::remote_and_local()
+    // The outside party and the inside one. An incoming threat comes from the
+    // source; an outgoing one is a device inside reaching out to the
+    // destination — the likeliest sign of an infected device.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn remote_and_local(&self) -> (&str, &str) {
+        if self.direction == "outgoing" {
+            (&self.dst_ip, &self.src_ip)
+        } else {
+            (&self.src_ip, &self.dst_ip)
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Threat::firewall_event()
+    // The same detection in the shared firewall shape, for the firewall
+    // dashboard: the signature (or policy) is the rule, the event name the chain.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn firewall_event(&self) -> FirewallEvent {
+        let rule = [&self.signature, &self.policy]
+            .into_iter()
+            .find(|v| !v.is_empty())
+            .unwrap_or(&self.event)
+            .clone();
+        FirewallEvent {
+            ts: self.ts,
+            action: self.action,
+            protocol: self.protocol.clone(),
+            src_ip: self.src_ip.clone(),
+            src_port: self.src_port,
+            dst_ip: self.dst_ip.clone(),
+            dst_port: self.dst_port,
+            src_zone: self.src_zone.clone(),
+            dst_zone: self.dst_zone.clone(),
+            rule,
+            bytes: self.bytes,
+            event_type: self.event.clone(),
+            application: self.application.clone(),
+        }
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// parse_cef(record)
-// Parses a UniFi CEF record that describes traffic into a firewall event; None
-// for malformed records and for events without a source and destination.
+// parse_threat(record)
+// Parses a UniFi CEF record that describes traffic; None for malformed records
+// and for events without a source and destination.
 // ─────────────────────────────────────────────────────────────────────────────
-fn parse_cef(record: &str) -> Option<FirewallEvent> {
+pub fn parse_threat(record: &str) -> Option<Threat> {
     let (header, extension) = cef_split(record)?;
     let kv = cef_fields(extension);
     let get = |key: &str| kv.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str()).unwrap_or("");
@@ -290,25 +373,157 @@ fn parse_cef(record: &str) -> Option<FirewallEvent> {
     if src_ip.is_empty() || dst_ip.is_empty() {
         return None;
     }
-    let name = header[5].clone();
-    Some(FirewallEvent {
+    Some(Threat {
         ts: DateTime::parse_from_rfc3339(get("UNIFIutcTime")).ok().map(|t| t.naive_utc()),
+        event: header[5].clone(),
+        severity: header[6].trim().parse().ok(),
+        risk: get("UNIFIrisk").to_lowercase(),
         action: cef_action(get("act")),
-        protocol: get("proto").to_lowercase(),
+        signature: get("UNIFIipsSignature").to_string(),
+        signature_id: get("UNIFIipsSignatureId").to_string(),
+        policy: get("UNIFIpolicyName").to_string(),
+        policy_type: get("UNIFIpolicyType").to_string(),
+        direction: get("UNIFIdirection").to_lowercase(),
         src_ip: src_ip.to_string(),
         src_port: get("spt").parse().ok(),
         dst_ip: dst_ip.to_string(),
         dst_port: get("dpt").parse().ok(),
+        protocol: get("proto").to_lowercase(),
+        application: get("app").to_string(),
         src_zone: first(&["UNIFIsrcZone", "deviceInboundInterface"]),
         dst_zone: first(&["UNIFIdstZone", "deviceOutboundInterface"]),
-        rule: match first(&["UNIFIipsSignature", "UNIFIpolicyName"]) {
-            rule if rule.is_empty() => name.clone(),
-            rule => rule,
-        },
         bytes: get("UNIFItotalBytes").parse().ok(),
-        event_type: name,
-        application: get("app").to_string(),
+        packets: get("UNIFItotalPackets").parse().ok(),
+        message: get("msg").to_string(),
     })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// init_threats(conn)
+// Creates the threats table.
+// ─────────────────────────────────────────────────────────────────────────────
+fn init_threats(conn: &Connection) -> Result<()> {
+    conn.execute_batch(&format!(
+        r#"
+        CREATE TABLE IF NOT EXISTS {THREATS_TABLE} (
+            source_ip     VARCHAR,
+            ts            TIMESTAMP,
+            event         VARCHAR,
+            severity      INTEGER,
+            risk          VARCHAR,
+            action        VARCHAR,
+            signature     VARCHAR,
+            signature_id  VARCHAR,
+            policy        VARCHAR,
+            policy_type   VARCHAR,
+            direction     VARCHAR,
+            src_ip        VARCHAR,
+            src_port      INTEGER,
+            dst_ip        VARCHAR,
+            dst_port      INTEGER,
+            protocol      VARCHAR,
+            application   VARCHAR,
+            src_zone      VARCHAR,
+            dst_zone      VARCHAR,
+            remote_ip     VARCHAR,
+            local_ip      VARCHAR,
+            bytes         BIGINT,
+            packets       BIGINT,
+            message       VARCHAR,
+            country       VARCHAR,
+            country_code  VARCHAR,
+            received_at   TIMESTAMP,
+            raw           VARCHAR
+        );
+        "#
+    ))?;
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// insert_threat(conn, source_ip, received_at, threat, raw)
+// Stores one detection. The country is the outside party's, and the time is
+// the gateway's when it agrees with the arrival time (see firewall::event_time).
+// ─────────────────────────────────────────────────────────────────────────────
+fn insert_threat(
+    conn: &Connection,
+    source_ip: &str,
+    received_at: NaiveDateTime,
+    threat: &Threat,
+    raw: &str,
+) -> Result<()> {
+    let (remote, local) = threat.remote_and_local();
+    let (country_code, country) = crate::geo::lookup(remote);
+    conn.execute(
+        &format!(
+            "INSERT INTO {THREATS_TABLE}
+             (source_ip, ts, event, severity, risk, action, signature, signature_id, policy,
+              policy_type, direction, src_ip, src_port, dst_ip, dst_port, protocol, application,
+              src_zone, dst_zone, remote_ip, local_ip, bytes, packets, message, country,
+              country_code, received_at, raw)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        ),
+        duckdb::params![
+            source_ip,
+            firewall::event_time(threat.ts, received_at),
+            threat.event,
+            threat.severity,
+            threat.risk,
+            threat.action.as_str(),
+            threat.signature,
+            threat.signature_id,
+            threat.policy,
+            threat.policy_type,
+            threat.direction,
+            threat.src_ip,
+            threat.src_port,
+            threat.dst_ip,
+            threat.dst_port,
+            threat.protocol,
+            threat.application,
+            threat.src_zone,
+            threat.dst_zone,
+            remote,
+            local,
+            threat.bytes,
+            threat.packets,
+            threat.message,
+            country,
+            country_code,
+            received_at,
+            raw,
+        ],
+    )?;
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// backfill_threats(conn)
+// Fills an empty threats table from the CEF lines already in the firewall
+// table — every UniFi detection stored before the table existed keeps its raw
+// record — so the threats dashboard starts with that history. Each row keeps
+// its stored time. A no-op once the table has rows.
+// ─────────────────────────────────────────────────────────────────────────────
+fn backfill_threats(conn: &Connection) -> Result<usize> {
+    let existing: i64 = conn.query_row(&format!("SELECT count(*) FROM {THREATS_TABLE}"), [], |r| r.get(0))?;
+    if existing > 0 {
+        return Ok(0);
+    }
+    let rows: Vec<(String, NaiveDateTime, NaiveDateTime, String)> = conn
+        .prepare(
+            "SELECT coalesce(source_ip, ''), coalesce(ts, received_at), received_at, raw
+             FROM unifi WHERE raw LIKE 'CEF:%' AND received_at IS NOT NULL",
+        )?
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
+        .collect::<Result<_, _>>()?;
+    let mut filled = 0;
+    for (source_ip, ts, received_at, raw) in rows {
+        let Some(mut threat) = parse_threat(&raw) else { continue };
+        threat.ts = Some(ts); // the time already decided for it
+        insert_threat(conn, &source_ip, received_at, &threat, &raw)?;
+        filled += 1;
+    }
+    Ok(filled)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -356,15 +571,34 @@ impl LogType for UniFi {
              WHERE starts_with(rule, '[' || event_type || ']')
                AND ltrim(substr(rule, length(event_type) + 3)) <> '';",
         )?;
+        init_threats(conn)?;
+        let filled = backfill_threats(conn)?;
+        if filled > 0 {
+            tracing::info!("unifi: filled the threats table with {filled} stored detection(s)");
+        }
         Ok(())
+    }
+
+    fn tables(&self) -> Vec<&'static str> {
+        vec!["unifi", THREATS_TABLE]
     }
 
     fn ingest(&self, raw: &str, meta: &Meta, conn: &Connection) -> Result<bool> {
         let line = full_line(raw, meta);
-        let Some(event) = parse_line(&line) else {
+        let line = line.trim();
+        // A detection goes to both tables: the firewall view and the threats view.
+        if let Some(start) = line.find("CEF:") {
+            let Some(threat) = parse_threat(&line[start..]) else {
+                return Ok(false);
+            };
+            firewall::insert(conn, "unifi", &threat.firewall_event(), meta, line)?;
+            insert_threat(conn, &meta.source_ip, meta.received_at.naive_utc(), &threat, line)?;
+            return Ok(true);
+        }
+        let Some(event) = parse_line(line) else {
             return Ok(false);
         };
-        firewall::insert(conn, "unifi", &event, meta, line.trim())?;
+        firewall::insert(conn, "unifi", &event, meta, line)?;
         Ok(true)
     }
 }
@@ -606,6 +840,97 @@ mod tests {
         assert!(parse_line(&DISCOVERY.replace("DPT=10001", "DPT=67")).is_some());
         assert!(parse_line(&DISCOVERY.replace("DST=255.255.255.255", "DST=192.168.99.20")).is_some());
         assert!(parse_line(&DISCOVERY.replace("PROTO=UDP", "PROTO=TCP")).is_some());
+    }
+
+    #[test]
+    fn reads_a_threat_in_full() {
+        let t = parse_threat(THREAT).expect("should parse");
+        assert_eq!(t.event, "Threat Detected");
+        assert_eq!(t.severity, Some(7));
+        assert_eq!(t.risk, "medium");
+        assert_eq!(t.signature_id, "2402000");
+        assert_eq!(t.policy, "DShield Block List");
+        assert_eq!(t.policy_type, "IDS/IPS");
+        assert_eq!(t.direction, "incoming");
+        assert_eq!(t.packets, Some(1));
+        assert_eq!(t.message, "A network intrusion attempt from 203.0.113.41 to 192.168.3.13 has been detected.");
+        assert_eq!(t.remote_and_local(), ("203.0.113.41", "192.168.3.13"));
+        // Outgoing: a device inside reaching a bad address — the outside party
+        // is the destination.
+        let out = parse_threat(&THREAT.replace("UNIFIdirection=incoming", "UNIFIdirection=outgoing")).unwrap();
+        assert_eq!(out.remote_and_local(), ("192.168.3.13", "203.0.113.41"));
+    }
+
+    // A threats-table row for the tests: (remote, local, risk, signature_id, raw).
+    fn threat_rows(conn: &Connection) -> Vec<(String, String, String, String, String)> {
+        conn.prepare("SELECT remote_ip, local_ip, risk, signature_id, raw FROM unifi_threats ORDER BY remote_ip")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect()
+    }
+
+    #[test]
+    fn a_detection_lands_in_both_tables() {
+        use crate::logtype::Registry;
+        use chrono::Utc;
+
+        let conn = Connection::open_in_memory().unwrap();
+        Registry::with_defaults().init_all(&conn).unwrap();
+        let meta = Meta {
+            source_ip: "192.168.1.1".into(),
+            hostname: None,
+            tag: Some("CEF".into()),
+            body: THREAT.to_string(),
+            received_at: Utc::now(),
+        };
+        assert!(UniFi.ingest(THREAT.trim_start_matches("CEF:"), &meta, &conn).unwrap());
+        let firewall: i64 = conn.query_row("SELECT count(*) FROM unifi", [], |r| r.get(0)).unwrap();
+        assert_eq!(firewall, 1, "still on the firewall dashboard");
+        let rows = threat_rows(&conn);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "203.0.113.41");
+        assert_eq!(rows[0].2, "medium");
+        assert_eq!(rows[0].3, "2402000");
+        assert_eq!(rows[0].4, THREAT);
+        // A firewall-rule hit is not a threat.
+        let meta = Meta { body: UCG_BLOCK.to_string(), tag: None, ..meta };
+        assert!(UniFi.ingest(UCG_BLOCK, &meta, &conn).unwrap());
+        assert_eq!(threat_rows(&conn).len(), 1);
+    }
+
+    #[test]
+    fn fills_the_threats_table_from_stored_detections_once() {
+        let conn = Connection::open_in_memory().unwrap();
+        UniFi.init_schema(&conn).unwrap();
+        // As stored by 0.11.x: CEF lines in the firewall table only.
+        let outgoing = THREAT.replace("UNIFIdirection=incoming", "UNIFIdirection=outgoing");
+        for raw in [THREAT, outgoing.as_str(), UCG_BLOCK] {
+            conn.execute(
+                "INSERT INTO unifi (source_ip, ts, received_at, raw)
+                 VALUES ('192.168.1.1', TIMESTAMP '2026-11-07 08:59:04', TIMESTAMP '2026-11-07 08:59:05', ?)",
+                [raw],
+            )
+            .unwrap();
+        }
+        UniFi.init_schema(&conn).unwrap(); // the upgrade's first start
+        let rows = threat_rows(&conn);
+        assert_eq!(rows.len(), 2, "both detections, not the firewall hit");
+        assert_eq!(rows[0].0, "192.168.3.13", "outgoing: the outside party is the destination");
+        let ts: String = conn
+            .query_row("SELECT CAST(min(ts) AS VARCHAR) FROM unifi_threats", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(ts, "2026-11-07 08:59:04", "each row keeps its stored time");
+        UniFi.init_schema(&conn).unwrap(); // every later start
+        assert_eq!(threat_rows(&conn).len(), 2, "never filled twice");
+    }
+
+    #[test]
+    fn retention_covers_the_threats_table() {
+        use crate::logtype::Registry;
+        assert!(Registry::with_defaults().tables().contains(&THREATS_TABLE));
+        assert_eq!(UniFi.tables(), ["unifi", THREATS_TABLE]);
     }
 
     #[test]
