@@ -320,6 +320,18 @@ cargo test             # run unit tests (e.g. the Apache parser)
 RUST_LOG=debug cargo run   # run with verbose logging
 ```
 
+Before tagging a release, run the same checks CI does (`.github/workflows/checks.yml`,
+which also runs on every push to `main` and weekly):
+
+```sh
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
+cargo audit            # cargo install --locked cargo-audit
+```
+
+`cargo audit` reads `.cargo/audit.toml`; an advisory listed there carries the
+reason it can't be fixed or can't affect EasyLog.
+
 For local testing without root, set `syslog_port = 5514` in your config and send
 a sample line:
 

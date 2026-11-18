@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (RUSTSEC-2026-0442). Tera's optional built-in filters, which no template
   uses, are turned off; that drops the unmaintained `chrono-tz` and
   `chrono-tz-build` (RUSTSEC-2026-0555, RUSTSEC-2026-0559) and 10 other crates.
+- `chrono`'s "unmaintained" notice (RUSTSEC-2026-0543) is recorded as
+  reviewed in `.cargo/audit.toml`: DuckDB's Arrow layer and the syslog parser
+  require chrono, even in their latest releases, so it can't be removed yet.
+
+### Added
+
+- CI checks (`.github/workflows/checks.yml`): `cargo clippy` with warnings as
+  errors, `cargo test` and `cargo audit`, on every push to `main`, on pull
+  requests and weekly. The release workflow runs them first and builds no
+  packages unless all three pass.
 
 ## [0.11.4] — 2026-11-08
 

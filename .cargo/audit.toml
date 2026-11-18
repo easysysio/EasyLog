@@ -1,0 +1,23 @@
+# cargo audit configuration. Every ignored advisory says why it cannot be
+# fixed or cannot affect EasyLog, and when to look again. Remove an entry as
+# soon as an upgrade clears it.
+
+[advisories]
+ignore = [
+    # RUSTSEC-2026-0543 — chrono is unmaintained (no vulnerability).
+    #
+    # Not removable: two dependencies require chrono, and their newest
+    # releases still do (checked 2026-11-18):
+    #   * duckdb → arrow (arrow-array, -arith, -cast). duckdb's arrow
+    #     dependency is not optional, and arrow 60.1 still needs chrono.
+    #   * syslog_loose, whose parsed timestamps are chrono types (0.23.0
+    #     too).
+    # Moving EasyLog's own code to jiff or time would leave chrono in the
+    # build, so the warning would stay. chrono-tz and chrono-tz-build
+    # (RUSTSEC-2026-0555/0559) are already gone: Tera is built without its
+    # optional built-ins.
+    #
+    # Re-check when upgrading duckdb or syslog_loose; `cargo tree -i chrono`
+    # shows what still pulls it in.
+    "RUSTSEC-2026-0543",
+]

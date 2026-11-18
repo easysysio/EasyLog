@@ -1,0 +1,74 @@
+# =============================================================================
+# checks.yml — cargo clippy, cargo test and cargo audit.
+#
+# Runs on every push to main, on pull requests and weekly, and is called by
+# release.yml, so packages are only built when all three pass. Clippy fails on
+# any warning; audit fails on any vulnerability not ignored (with its reason)
+# in .cargo/audit.toml.
+#
+# The weekly run catches advisories published after the last push. It also
+# means a run can fail on a day the code didn't change: fix the dependency, or
+# record why it can't affect EasyLog in .cargo/audit.toml.
+#
+# Every action is pinned to a full commit SHA, with its release in the
+# trailing comment; Dependabot proposes updates.
+# =============================================================================
+
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-test:
+    name: cargo clippy + test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+          components: clippy
+
+      # The bundled DuckDB is a long C++ build; the cache keeps it between runs.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: checks
+
+      - name: Clippy
+        # CI's stable clippy can be newer than a local toolchain, so a lint
+        # added since can fail here on code that is clean locally.
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # Cached by rust-cache (it keeps ~/.cargo/bin), so this compiles once.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: audit
+
+      - name: Install cargo-audit
+        run: cargo install --locked cargo-audit --version 0.23.0
+
+      - name: Audit
+        run: cargo audit
