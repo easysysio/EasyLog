@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Dependency updates clearing `cargo audit` warnings: `rustix` 1.1.6
+  (RUSTSEC-2026-0486) and the Arrow crates under DuckDB to 58.4.2
+  (RUSTSEC-2026-0442). Tera's optional built-in filters, which no template
+  uses, are turned off; that drops the unmaintained `chrono-tz` and
+  `chrono-tz-build` (RUSTSEC-2026-0555, RUSTSEC-2026-0559) and 10 other crates.
+
 ## [0.11.4] — 2026-11-08
 
 ### Security
